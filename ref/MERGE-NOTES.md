@@ -22,7 +22,20 @@ each change can be traced back to its author.
 | #54, #51, #24, #6 | iOS scope. |
 | #45, #43, #19, #35, #52, #60, #53 | Already merged into `main`. |
 
-## 26.3 fixes people cite that are not recoverable
+## 26.3 fixes in TOWO — recovered from binaries
+
+See `towo-builds/`. The source is gone (dangling submodule pointers), but the
+release APKs survive, and the three `libmobileglues.so` builds are vendored
+alongside a `strings`-derived account of what each one changed.
+
+TOWO and PR #61 fix **different** bugs and both are needed:
+
+| Symptom | Fix |
+|---------|-----|
+| Blocks invisible on 26.3, especially Mali | TOWO 2.0.1 / 2.0.3 — GLSL rewriter for Mali dynamic fragment output arrays, plus `GL_ARB_clip_control` exposure and a sRGB colourspace fallback |
+| Terrain sorts wrongly, clouds through blocks | PR #61 — depth filter completeness |
+
+## 26.3 fixes people cite that are not recoverable in source
 
 `DNAMobileApplications/MobileGlues-plugin-towo` carries two commits titled
 "Fixed 26.3 Snapshot 9" and "Fixed a performance regression with 26.3". Both are
