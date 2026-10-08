@@ -1,0 +1,395 @@
+## classes touching org.lwjgl.opengl: 33
+================================================================================================
+com.mojang.blaze3d.platform.NativeLibrariesBootstrap
+  public com.mojang.blaze3d.platform.NativeLibrariesBootstrap();
+      -> system/Configuration.get, system/Configuration.set
+  private static void configureLWJGLLibraryPath();
+      -> Version.getVersion, system/Configuration.get, system/Configuration.set, system/Platform.getArchitecture
+  private static java.util.function.Supplier<java.lang.String> setupLWJGLCapture();
+      -> system/Configuration.get, system/Configuration.set
+  private static void loadLibrary(java.util.function.Supplier<java.lang.String>, java.lang.String, java.lang.Runnable);
+      -> system/Configuration.get
+  private static void loadLWJGLSystem();
+      -> system/Library.initialize
+  private static void loadSdl();
+      -> sdl/SDL.getLibrary
+  private static void loadOpenGL();
+      -> opengl/GL.getFunctionProvider
+  private static void loadOpenAL();
+      -> openal/ALC.getFunctionProvider
+  private static void loadSTB();
+      -> stb/STBImage.stbi_failure_reason
+  private static boolean tryLoadingVulkan();
+      -> system/Configuration.get, system/Configuration.set, vulkan/VK.create
+  private static void loadShaderc();
+      -> util/shaderc/Shaderc.getLibrary
+  private static void loadSpvc();
+      -> util/spvc/Spvc.getLibrary
+  private static void loadVma();
+      -> util/vma/Vma.vmaDestroyAllocator
+  private static void loadFreeType();
+      -> util/freetype/FreeType.getLibrary
+  private static java.lang.String lambda$listLibrariesDirectory$0(com.mojang.datafixers.util.Pair);
+      -> system/Platform.get, system/Platform.getArchitecture, system/Platform.toString
+================================================================================================
+com.mojang.renderpearl.backend.opengl.BufferStorage
+================================================================================================
+com.mojang.renderpearl.backend.opengl.DirectStateAccess$Core
+  public int createBuffer();
+      -> opengl/ARBDirectStateAccess.glCreateBuffers
+  public void bufferData(int, long, int);
+      -> opengl/ARBDirectStateAccess.glNamedBufferData
+  public void bufferData(int, java.nio.ByteBuffer, int);
+      -> opengl/ARBDirectStateAccess.glNamedBufferData
+  public void bufferSubData(int, long, java.nio.ByteBuffer, int);
+      -> opengl/ARBDirectStateAccess.glNamedBufferSubData
+  public void bufferStorage(int, long, int);
+      -> opengl/ARBDirectStateAccess.glNamedBufferStorage
+  public void bufferStorage(int, java.nio.ByteBuffer, int);
+      -> opengl/ARBDirectStateAccess.glNamedBufferStorage
+  public java.nio.ByteBuffer mapBufferRange(int, long, long, int, int);
+      -> opengl/ARBDirectStateAccess.glMapNamedBufferRange
+  public void unmapBuffer(int, int);
+      -> opengl/ARBDirectStateAccess.glUnmapNamedBuffer
+  public int createFrameBufferObject();
+      -> opengl/ARBDirectStateAccess.glCreateFramebuffers
+  public void bindFrameBufferTextures(int, int[], int[], int, int, int);
+      -> opengl/ARBDirectStateAccess.glNamedFramebufferTexture
+  public void blitFrameBuffers(int, int, int, int, int, int, int, int, int, int, int, int);
+      -> opengl/ARBDirectStateAccess.glBlitNamedFramebuffer
+  public void flushMappedBufferRange(int, long, long, int);
+      -> opengl/ARBDirectStateAccess.glFlushMappedNamedBufferRange
+  public void copyBufferSubData(int, int, long, long, long);
+      -> opengl/ARBDirectStateAccess.glCopyNamedBufferSubData
+================================================================================================
+com.mojang.renderpearl.backend.opengl.DirectStateAccess$Emulated
+  public void bufferStorage(int, long, int);
+      -> opengl/ARBBufferStorage.glBufferStorage
+  public void bufferStorage(int, java.nio.ByteBuffer, int);
+      -> opengl/ARBBufferStorage.glBufferStorage
+  public void flushMappedBufferRange(int, long, long, int);
+      -> opengl/GL33C.glFlushMappedBufferRange
+  public void copyBufferSubData(int, int, long, long, long);
+      -> opengl/GL33C.glCopyBufferSubData
+================================================================================================
+com.mojang.renderpearl.backend.opengl.DirectStateAccess
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlBackend
+  public java.lang.String getName();
+      -> opengl/GL.getFunctionProvider, sdl/SDLError.SDL_GetError, sdl/SDLVideo.SDL_GL_GetProcAddress, sdl/SDLVideo.SDL_GL_LoadLibrary, sdl/SDLVideo.SDL_GL_UnloadLibrary, system/FunctionProvider.getFunctionAddress, system/SharedLibrary.getPath
+  public void unloadLibrary();
+      -> sdl/SDLVideo.SDL_GL_UnloadLibrary
+  public long createWindow(java.lang.String, int, int, long);
+      -> sdl/SDLVideo.SDL_CreateWindow, sdl/SDLVideo.SDL_GL_SetAttribute
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlBuffer$Direct
+  public com.mojang.renderpearl.api.buffers.GpuBufferSlice$MappedView map(long, long, boolean, boolean);
+      -> system/MemoryUtil.memSlice
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlCommandEncoder
+  public void submit();
+      -> opengl/GL33C.glFenceSync
+  public boolean awaitSubmit(long, long);
+      -> opengl/GL33C.glDeleteSync
+  public com.mojang.renderpearl.backend.api.RenderPassBackend createRenderPass(com.mojang.renderpearl.api.commands.RenderPassDescriptor);
+      -> opengl/GL33C.glDrawBuffers
+  public void clearColorTexture(com.mojang.renderpearl.api.textures.GpuTexture, org.joml.Vector4fc);
+      -> opengl/GL33C.glClearColor
+  public void clearColorAndDepthTextures(com.mojang.renderpearl.api.textures.GpuTexture, org.joml.Vector4fc, com.mojang.renderpearl.api.textures.GpuTexture, double);
+      -> opengl/GL33C.glClearColor, opengl/GL33C.glClearDepth
+  public void clearColorAndDepthTextures(com.mojang.renderpearl.api.textures.GpuTexture, org.joml.Vector4fc, com.mojang.renderpearl.api.textures.GpuTexture, double, int, int, int, int, int);
+      -> opengl/GL33C.glClearColor, opengl/GL33C.glClearDepth
+  public void clearDepthTexture(com.mojang.renderpearl.api.textures.GpuTexture, double);
+      -> opengl/GL33C.glClearDepth, opengl/GL33C.glDrawBuffer
+  public void writeToTexture(com.mojang.renderpearl.api.textures.GpuTexture, java.nio.ByteBuffer, int, int, int, int, int, int);
+      -> opengl/GL33C.glBindTexture
+  public void copyBufferToTexture(com.mojang.renderpearl.api.buffers.GpuBufferSlice, int, int, int, int, com.mojang.renderpearl.api.textures.GpuTexture, int, int, int, int, int, int);
+      -> opengl/GL33C.glBindTexture
+  protected void executeDraw(com.mojang.renderpearl.backend.opengl.GlRenderPass, int, int, int, com.mojang.renderpearl.api.pipeline.IndexType, int, int);
+      -> opengl/ARBBaseInstance.glDrawArraysInstancedBaseInstance, opengl/ARBBaseInstance.glDrawElementsInstancedBaseVertexBaseInstance, opengl/GL33C.glDrawArraysInstanced, opengl/GL33C.glDrawElementsInstancedBaseVertex
+  public void executeDraws(com.mojang.renderpearl.backend.opengl.GlRenderPass, com.mojang.renderpearl.api.pipeline.IndexType, org.lwjgl.PointerBuffer, java.nio.IntBuffer, java.nio.IntBuffer, int);
+      -> opengl/GL33C.nglMultiDrawArrays, opengl/GL33C.nglMultiDrawElementsBaseVertex, system/MemoryUtil.memAddress
+  protected void executeDrawIndirect(com.mojang.renderpearl.backend.opengl.GlRenderPass, com.mojang.renderpearl.api.pipeline.IndexType, com.mojang.renderpearl.backend.opengl.GlBuffer, long, int);
+      -> opengl/ARBDrawIndirect.glDrawArraysIndirect, opengl/ARBDrawIndirect.glDrawElementsIndirect, opengl/ARBMultiDrawIndirect.glMultiDrawArraysIndirect, opengl/ARBMultiDrawIndirect.glMultiDrawElementsIndirect
+  private void setupDraw(com.mojang.renderpearl.backend.opengl.GlRenderPass);
+      -> opengl/GL33C.glBindBufferRange, opengl/GL33C.glBindSampler, opengl/GL33C.glBindTexture, opengl/GL33C.glTexBuffer
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlConst
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlDebug
+  private void printDebugLog(int, int, int, int, int, long, long);
+      -> opengl/GLDebugMessageCallback.getMessage
+  public static com.mojang.renderpearl.backend.opengl.GlDebug enableDebugCallback(int, boolean, java.util.Set<java.lang.String>);
+      -> opengl/ARBDebugOutput.glDebugMessageCallbackARB, opengl/ARBDebugOutput.glDebugMessageControlARB, opengl/GL.getCapabilities, opengl/GL33C.glEnable, opengl/GLDebugMessageARBCallback.create, opengl/GLDebugMessageCallback.create, opengl/KHRDebug.glDebugMessageCallback, opengl/KHRDebug.glDebugMessageControl
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlDebugLabel$Core
+  private com.mojang.renderpearl.backend.opengl.GlDebugLabel$Core();
+      -> opengl/GL33C.glGetInteger
+  public void applyLabel(com.mojang.renderpearl.backend.opengl.GlBuffer, java.util.function.Supplier<java.lang.String>);
+      -> opengl/KHRDebug.glObjectLabel
+  public void applyLabel(com.mojang.renderpearl.backend.opengl.GlTexture);
+      -> opengl/KHRDebug.glObjectLabel
+  public void applyLabel(com.mojang.renderpearl.backend.opengl.GlShaderModule);
+      -> opengl/KHRDebug.glObjectLabel
+  public void applyLabel(com.mojang.renderpearl.backend.opengl.GlProgram);
+      -> opengl/KHRDebug.glObjectLabel
+  public void pushDebugGroup(java.util.function.Supplier<java.lang.String>);
+      -> opengl/KHRDebug.glPushDebugGroup
+  public void popDebugGroup();
+      -> opengl/KHRDebug.glPopDebugGroup
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlDebugLabel$Ext
+  public void applyLabel(com.mojang.renderpearl.backend.opengl.GlBuffer, java.util.function.Supplier<java.lang.String>);
+      -> opengl/EXTDebugLabel.glLabelObjectEXT
+  public void applyLabel(com.mojang.renderpearl.backend.opengl.GlTexture);
+      -> opengl/EXTDebugLabel.glLabelObjectEXT
+  public void applyLabel(com.mojang.renderpearl.backend.opengl.GlShaderModule);
+      -> opengl/EXTDebugLabel.glLabelObjectEXT
+  public void applyLabel(com.mojang.renderpearl.backend.opengl.GlProgram);
+      -> opengl/EXTDebugLabel.glLabelObjectEXT
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlDebugLabel
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlDevice
+  public com.mojang.renderpearl.api.textures.GpuTexture createTexture(java.lang.String, int, com.mojang.renderpearl.api.GpuFormat, int, int, int, int);
+      -> opengl/GL33C.glBindTexture
+  public void close();
+      -> sdl/SDLVideo.SDL_DestroyWindow, sdl/SDLVideo.SDL_GL_DestroyContext
+  public long getTimestampCalibrationOffset();
+      -> opengl/GL33C.glGetInteger64
+  void makeCurrent(long);
+      -> sdl/SDLVideo.SDL_GL_MakeCurrent
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlHeuristics
+  public com.mojang.renderpearl.api.device.DeviceInfo createDeviceInfo(org.lwjgl.opengl.GLCapabilities, int, java.util.Set<java.lang.String>);
+      -> opengl/GL33C.glGetInteger
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlProgram
+  public void setupBindGroupLayouts(java.util.List<com.mojang.renderpearl.api.pipeline.BindGroupLayout$UniformDescription>);
+      -> opengl/GL33C.glGetUniformBlockIndex, opengl/GL33C.glUniform1i, opengl/GL33C.glUniformBlockBinding
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlQueryPool
+  public com.mojang.renderpearl.backend.opengl.GlQueryPool(int);
+      -> opengl/GL33C.glGenQueries
+  public java.util.OptionalLong getValue(int);
+      -> opengl/GL33C.glGetQueryObjecti, opengl/GL33C.glGetQueryObjectui64
+  protected void writeTimestamp(int);
+      -> opengl/GL33C.glQueryCounter
+  public void close();
+      -> opengl/GL33C.glDeleteQueries
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlRenderPipeline
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlSampler
+  public com.mojang.renderpearl.backend.opengl.GlSampler(com.mojang.renderpearl.api.textures.AddressMode, com.mojang.renderpearl.api.textures.AddressMode, com.mojang.renderpearl.api.textures.FilterMode, com.mojang.renderpearl.api.textures.FilterMode, int, java.util.OptionalDouble);
+      -> opengl/GL33C.glGenSamplers, opengl/GL33C.glSamplerParameterf, opengl/GL33C.glSamplerParameteri
+  public void close();
+      -> opengl/GL33C.glDeleteSamplers
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlStateManager$BlendState
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlStateManager$BooleanState
+  public void setEnabled(boolean);
+      -> opengl/GL33C.glDisable, opengl/GL33C.glEnable
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlStateManager$ColorLogicState
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlStateManager$CullState
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlStateManager$DepthState
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlStateManager$PolygonOffsetState
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlStateManager$ScissorState
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlStateManager
+  public static void _scissorBox(int, int, int, int);
+      -> opengl/GL33C.glScissor
+  public static void _depthFunc(int);
+      -> opengl/GL33C.glDepthFunc
+  public static void _depthMask(boolean);
+      -> opengl/GL33C.glDepthMask
+  public static void _disableBlend(int);
+      -> opengl/GL33C.glDisablei
+  public static void _enableBlend(int);
+      -> opengl/GL33C.glEnablei
+  public static int glGetProgrami(int, int);
+      -> opengl/GL33C.glGetProgrami
+  public static void glAttachShader(int, int);
+      -> opengl/GL33C.glAttachShader
+  public static void glDeleteShader(int);
+      -> opengl/GL33C.glDeleteShader
+  public static int glCreateShader(int);
+      -> opengl/GL33C.glCreateShader
+  public static void glShaderSource(int, java.lang.String);
+      -> PointerBuffer.address0, PointerBuffer.put, opengl/GL33C.nglShaderSource, system/MemoryStack.close, system/MemoryStack.mallocPointer, system/MemoryStack.stackPush, system/MemoryUtil.memAlloc, system/MemoryUtil.memFree
+  public static void glCompileShader(int);
+      -> opengl/GL33C.glCompileShader
+  public static int glGetShaderi(int, int);
+      -> opengl/GL33C.glGetShaderi
+  public static void _glUseProgram(int);
+      -> opengl/GL33C.glUseProgram
+  public static int glCreateProgram();
+      -> opengl/GL33C.glCreateProgram
+  public static void glDeleteProgram(int);
+      -> opengl/GL33C.glDeleteProgram
+  public static void glLinkProgram(int);
+      -> opengl/GL33C.glLinkProgram
+  public static int _glGetUniformLocation(int, java.lang.CharSequence);
+      -> opengl/GL33C.glGetUniformLocation
+  public static void _glUniform1i(int, int);
+      -> opengl/GL33C.glUniform1i
+  public static void _glBindAttribLocation(int, int, java.lang.CharSequence);
+      -> opengl/GL33C.glBindAttribLocation
+  public static int _glGenBuffers();
+      -> opengl/GL33C.glGenBuffers
+  public static int _glGenVertexArrays();
+      -> opengl/GL33C.glGenVertexArrays
+  public static void _glBindBuffer(int, int);
+      -> opengl/GL33C.glBindBuffer
+  public static void _glBindVertexArray(int);
+      -> opengl/GL33C.glBindVertexArray
+  public static void _glBufferData(int, java.nio.ByteBuffer, int);
+      -> opengl/GL33C.glBufferData
+  public static void _glBufferSubData(int, long, java.nio.ByteBuffer);
+      -> opengl/GL33C.glBufferSubData
+  public static void _glBufferData(int, long, int);
+      -> opengl/GL33C.glBufferData
+  public static java.nio.ByteBuffer _glMapBufferRange(int, long, long, int);
+      -> opengl/GL33C.glMapBufferRange
+  public static void _glUnmapBuffer(int);
+      -> opengl/GL33C.glUnmapBuffer
+  public static void _glDeleteBuffers(int);
+      -> opengl/GL33C.glDeleteBuffers
+  public static void _glBindFramebuffer(int, int);
+      -> opengl/GL33C.glBindFramebuffer
+  public static void _glBlitFrameBuffer(int, int, int, int, int, int, int, int, int, int);
+      -> opengl/GL33C.glBlitFramebuffer
+  public static void _glDeleteFramebuffers(int);
+      -> opengl/GL33C.glDeleteFramebuffers
+  public static int glGenFramebuffers();
+      -> opengl/GL33C.glGenFramebuffers
+  public static void _glFramebufferTexture2D(int, int, int, int, int);
+      -> opengl/GL33C.glFramebufferTexture2D
+  public static void _glReadBuffer(int);
+      -> opengl/GL33C.glReadBuffer
+  public static void glBlendFuncSeparate(int, int, int, int);
+      -> opengl/GL33C.glBlendFuncSeparate
+  public static void glBlendEquationSeparate(int, int);
+      -> opengl/GL33C.glBlendEquationSeparate
+  public static java.lang.String glGetShaderInfoLog(int, int);
+      -> opengl/GL33C.glGetShaderInfoLog
+  public static java.lang.String glGetProgramInfoLog(int, int);
+      -> opengl/GL33C.glGetProgramInfoLog
+  public static void _polygonMode(int, int);
+      -> opengl/GL33C.glPolygonMode
+  public static void _polygonOffset(float, float);
+      -> opengl/GL33C.glPolygonOffset
+  public static void _logicOp(int);
+      -> opengl/GL33C.glLogicOp
+  public static void _activeTexture(int);
+      -> opengl/GL33C.glActiveTexture
+  public static void _texParameter(int, int, int);
+      -> opengl/GL33C.glTexParameteri
+  public static int _getTexLevelParameter(int, int, int);
+      -> opengl/GL33C.glGetTexLevelParameteri
+  public static int _genTexture();
+      -> opengl/GL33C.glGenTextures
+  public static void _deleteTexture(int);
+      -> opengl/GL33C.glDeleteTextures
+  public static void _bindTexture(int);
+      -> opengl/GL33C.glBindTexture
+  public static void _texImage2D(int, int, int, int, int, int, int, int, java.nio.ByteBuffer);
+      -> opengl/GL33C.glTexImage2D
+  public static void _texSubImage2D(int, int, int, int, int, int, int, int, long);
+      -> opengl/GL33C.glTexSubImage2D
+  public static void _texSubImage2D(int, int, int, int, int, int, int, int, java.nio.ByteBuffer);
+      -> opengl/GL33C.glTexSubImage2D
+  public static void _viewport(int, int, int, int);
+      -> opengl/GL33C.glViewport
+  public static void _colorMask(int);
+      -> opengl/GL33C.glColorMaski
+  public static void _colorMask(int, int);
+      -> opengl/GL33C.glColorMaski
+  public static void _clear(int);
+      -> opengl/GL33C.glClear
+  public static void _clearBuffer(int, org.joml.Vector4fc);
+      -> opengl/GL33C.glClearBufferfv
+  public static void _clearBuffer(double);
+      -> opengl/GL33C.glClearBufferfv
+  public static void _vertexAttribPointer(int, int, int, boolean, int, long);
+      -> opengl/GL33C.glVertexAttribPointer
+  public static void _vertexAttribIPointer(int, int, int, int, long);
+      -> opengl/GL33C.glVertexAttribIPointer
+  public static void _enableVertexAttribArray(int);
+      -> opengl/GL33C.glEnableVertexAttribArray
+  public static void _drawElements(int, int, int, long);
+      -> opengl/GL33C.glDrawElements
+  public static void _drawArrays(int, int, int);
+      -> opengl/GL33C.glDrawArrays
+  public static void _pixelStore(int, int);
+      -> opengl/GL33C.glPixelStorei
+  public static void _readPixels(int, int, int, int, int, int, long);
+      -> opengl/GL33C.glReadPixels
+  public static int _getError();
+      -> opengl/GL33C.glGetError
+  public static void clearGlErrors();
+      -> opengl/GL33C.glGetError
+  public static java.lang.String _getString(int);
+      -> opengl/GL33C.glGetString
+  public static int _getInteger(int);
+      -> opengl/GL33C.glGetInteger
+  public static long _glFenceSync(int, int);
+      -> opengl/GL33C.glFenceSync
+  public static int _glClientWaitSync(long, int, long);
+      -> opengl/GL33C.glClientWaitSync
+  public static void _glDeleteSync(long);
+      -> opengl/GL33C.glDeleteSync
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlTransientMemory$Fallback
+  private com.mojang.renderpearl.backend.opengl.GlTransientMemory$Fallback$GlAllocation allocateGlBlock(long);
+      -> system/MemoryUtil.nmemAlloc
+  private void freeGlBlock(com.mojang.renderpearl.backend.opengl.GlTransientMemory$Fallback$GlAllocation);
+      -> system/MemoryUtil.nmemFree
+  public com.mojang.renderpearl.api.buffers.GpuBufferSlice$MappedView allocateStaging(long, long, int, long, long);
+      -> system/MemoryUtil.memByteBuffer
+  public com.mojang.renderpearl.api.buffers.GpuBufferSlice uploadGpu(java.util.List<java.nio.ByteBuffer>, long, int, long, long);
+      -> opengl/GL33C.glUnmapBuffer, opengl/GL33C.nglMapBufferRange, system/MemoryUtil.memAddress, system/MemoryUtil.memCopy
+  public java.util.List<com.mojang.renderpearl.api.buffers.GpuBufferSlice> multiUploadGpu(java.util.List<java.nio.ByteBuffer>, long, int);
+      -> opengl/GL33C.glUnmapBuffer, opengl/GL33C.nglMapBufferRange, system/MemoryUtil.memAddress, system/MemoryUtil.memCopy
+  private void lambda$allocateStaging$0(com.mojang.renderpearl.backend.opengl.GlTransientMemory$TransientGpuBuffer, com.mojang.renderpearl.api.buffers.GpuBufferSlice, com.mojang.renderpearl.backend.util.TransientBlockAllocator$Allocation, int);
+      -> system/MemoryUtil.memByteBuffer
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlTransientMemory$PersistentMapping
+  public void close();
+      -> opengl/GL33C.glFinish
+  private com.mojang.renderpearl.backend.opengl.GlTransientMemory$PersistentMapping$GlAllocation allocateGlBlock(long, boolean, boolean);
+      -> opengl/ARBBufferStorage.glBufferStorage, opengl/GL33C.nglMapBufferRange
+  public com.mojang.renderpearl.api.buffers.GpuBufferSlice$MappedView allocateStaging(long, long, int, long, long);
+      -> system/MemoryUtil.memByteBuffer
+  public com.mojang.renderpearl.api.buffers.GpuBufferSlice$MappedView allocateGpuMapped(long, long, int, long, long);
+      -> system/MemoryUtil.memByteBuffer
+  public com.mojang.renderpearl.api.buffers.GpuBufferSlice upload(java.util.List<java.nio.ByteBuffer>, long, int, long, long, boolean);
+      -> system/MemoryUtil.memAddress, system/MemoryUtil.memCopy
+  public java.util.List<com.mojang.renderpearl.api.buffers.GpuBufferSlice> multiUpload(java.util.List<java.nio.ByteBuffer>, long, int, boolean);
+      -> system/MemoryUtil.memCopy
+================================================================================================
+com.mojang.renderpearl.backend.opengl.GlUtil
+================================================================================================
+com.mojang.renderpearl.backend.opengl.VertexArray$Emulated
+  private com.mojang.renderpearl.backend.opengl.VertexArray$Emulated(com.mojang.renderpearl.backend.opengl.GlProgram, com.mojang.renderpearl.backend.api.BackendRenderPipeline$CreateInfo);
+      -> opengl/GL33C.glEnableVertexAttribArray
+  public void bind(com.mojang.renderpearl.api.buffers.GpuBufferSlice[]);
+      -> opengl/GL33C.glVertexAttribDivisor, opengl/GL33C.glVertexAttribIPointer, opengl/GL33C.glVertexAttribPointer
+================================================================================================
+com.mojang.renderpearl.backend.opengl.VertexArray$Separate
+  private com.mojang.renderpearl.backend.opengl.VertexArray$Separate(com.mojang.renderpearl.backend.opengl.GlProgram, com.mojang.renderpearl.backend.api.BackendRenderPipeline$CreateInfo);
+      -> opengl/ARBVertexAttribBinding.glVertexAttribBinding, opengl/ARBVertexAttribBinding.glVertexAttribFormat, opengl/ARBVertexAttribBinding.glVertexAttribIFormat, opengl/ARBVertexAttribBinding.glVertexBindingDivisor, opengl/GL33C.glEnableVertexAttribArray, opengl/GL33C.glGetString
+  public void bind(com.mojang.renderpearl.api.buffers.GpuBufferSlice[]);
+      -> opengl/ARBVertexAttribBinding.glBindVertexBuffer
+================================================================================================
+com.mojang.renderpearl.backend.opengl.VertexArray
+  private com.mojang.renderpearl.backend.opengl.VertexArray();
+      -> opengl/GL33C.glGenVertexArrays
+  public void close();
+      -> opengl/GL33C.glDeleteVertexArrays
