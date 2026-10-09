@@ -30,9 +30,11 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x build-android.sh
+          NDK="${{ steps.ndk.outputs.ndk-path }}"
+          if [ -z "$NDK" ]; then echo "::error::NDK path is empty"; exit 1; fi
           for abi in arm64-v8a armeabi-v7a x86_64; do
             echo "::group::$abi"
-            ANDROID_NDK_HOME="${{ steps.ndk.outputs.ndkPath }}" \
+            ANDROID_NDK_HOME="$NDK" \
             COBALT_ABI="$abi" \
               ./build-android.sh
             echo "::endgroup::"
