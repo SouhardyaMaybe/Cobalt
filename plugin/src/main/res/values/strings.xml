@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The plugin's user-visible strings. Only the app name lives here.
+
+  The renderer config is deliberately not in this file: it is generated into
+  plugin/generated/res by tools/gen-config.py from config/cobalt-renderer.json,
+  because a hand-kept second copy is the drift that generator prevents.
+-->
+<resources>
+    <!--
+      Shown by the launcher in its renderer list, and as the app label. Kept
+      distinct from the library name so it is clear which one is being chosen:
+      the launcher lists renderers by this string.
+    -->
+    <string name="app_name">Cobalt Wrapper</string>
+</resources>
