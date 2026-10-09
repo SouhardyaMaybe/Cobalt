@@ -83,10 +83,21 @@ cmake --build "$BUILD" --config Release -j "$(nproc)"
 
 echo "==> Staging to $OUT/$COBALT_ABI"
 mkdir -p "$ROOT/$OUT/$COBALT_ABI"
-# Upstream names the artifact libmobileglues.so; the plugin config names it
-# libcobalt.so. Rename here rather than in the plugin, so the library and the
-# config cannot drift apart.
-install -m 755 "$BUILD/libmobileglues.so" "$ROOT/$OUT/$COBALT_ABI/libcobalt.so"
+# The output name follows CMake's project(), which tools/rebrand.py rewrites to
+# "cobalt", so the artifact is already libcobalt.so. Nothing needs renaming
+# here -- and nothing should: a rename step is one more place the library name
+# and the plugin config can drift apart.
+#
+# Derived from project() rather than hardcoded, so if the rebrand ever stops
+# rewriting it, the error is "no such file" naming the real path instead of a
+# copy step that silently ships the wrong name.
+SO="$BUILD/lib$(sed -n 's/^project("\(.*\)")$/\1/p' "$SRC/CMakeLists.txt" | head -1).so"
+if [ ! -f "$SO" ]; then
+    echo "error: expected $SO. CMake's project() name drives the output name;" >&2
+    echo "       project() in $SRC/CMakeLists.txt is: $(sed -n 's/^project(.*/&/p' "$SRC/CMakeLists.txt" | head -1)" >&2
+    exit 1
+fi
+install -m 755 "$SO" "$ROOT/$OUT/$COBALT_ABI/libcobalt.so"
 
 echo "==> Symbols"
 for abi in arm64-v8a armeabi-v7a x86_64; do
