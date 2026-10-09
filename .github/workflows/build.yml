@@ -219,12 +219,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # --clobber rather than create. Re-running a tag's build is normal --
-          # moving a tag to a fix commit, or a rebuild after a transient failure
-          # -- and "a release with the same tag name already exists" turned
-          # every one of those into a red build after all the real work had
-          # already passed. Clobbering overwrites the notes and assets for that
-          # tag, which is the intended outcome when a tag is re-run.
+          # Delete-then-create rather than create. Re-running a tag's build is
+          # ordinary -- moving a tag to a fix commit, or rebuilding after a
+          # transient failure -- and "a release with the same tag name already
+          # exists" turned every one of those into a red build after the
+          # renderer, the audit and the APK verification had all passed.
+          #
+          # gh 2.46 has no --clobber, which is the obvious fix and was the next
+          # thing tried; it fails with "unknown flag: --clobber" and dumps the
+          # whole help text. Hence the explicit delete.
+          #
+          # || true because a tag that has never been released has no release to
+          # delete, which is the normal first-run case. Deliberately no
+          # --cleanup-tag: that deletes the git tag too, and the tag is what
+          # identifies this build.
+          gh release delete "$GITHUB_REF_NAME" --yes || true
           gh release create "$GITHUB_REF_NAME" \
             plugin/build/outputs/apk/release/*.apk \
-            --generate-notes --clobber
+            --title "$GITHUB_REF_NAME" \
+            --notes-file RELEASE-NOTES.md
