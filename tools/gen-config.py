@@ -29,6 +29,8 @@ Usage:  tools/gen-config.py <config.json> <out-dir>
 import json
 import os
 import sys
+import xml.dom.minidom
+import xml.parsers.expat as expat
 
 # Field names from ZalithLauncher .../plugin/renderer_v2/data/RendererConfig.kt.
 # The launcher decodes with kotlinx.serialization and unknown keys are an error
@@ -141,6 +143,19 @@ def to_android_string(text):
     return out
 
 
+def _android_unescape(text):
+    """The inverse of to_android_string, as Android's resource loader does it."""
+    return (
+        text.replace("\\n", "\n").replace('\\"', '"').replace("\\'", "'")
+    )
+
+
+def _string_body(document):
+    """The <string> element's text, as the resource loader would hand it over."""
+    node = xml.dom.minidom.parseString(document).getElementsByTagName("string")[0]
+    return node.firstChild.data
+
+
 def main():
     if len(sys.argv) != 3:
         sys.stderr.write(__doc__)
@@ -163,17 +178,48 @@ def main():
             sys.stderr.write("  - %s\n" % p)
         return 1
 
+    rendered = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        "<resources>\n"
+        '    <string name="cobalt_renderer_config">%s</string>\n'
+        "</resources>\n"
+        % to_android_string(raw.strip())
+    )
+    # Parse what is about to be written. AGP reports a malformed resource as
+    # "Error parsing <path>" from ManifestMerger2, which names neither the
+    # offending character nor the escaping, so the round trip happens here.
+    try:
+        xml.dom.minidom.parseString(rendered)
+    except expat.ExpatError as e:
+        sys.stderr.write(
+            "error: generated resource is not well-formed XML: %s\n"
+            "       (this is an escaping bug in to_android_string)\n" % e
+        )
+        return 1
+
+    # And parse it the way the launcher will, rather than only proving the XML
+    # is well-formed. Those are different properties: a resource can parse as
+    # XML and still decode to something the launcher's RendererConfig rejects,
+    # and that is the failure it swallows in a runCatching and reports as
+    # "the launcher does not see my renderer".
+    try:
+        decoded = json.loads(_android_unescape(_string_body(rendered)))
+    except ValueError as e:
+        sys.stderr.write("error: resource does not decode as JSON: %s\n" % e)
+        return 1
+
+    if decoded != cfg:
+        sys.stderr.write(
+            "error: the resource does not round-trip to the config it was\n"
+            "       generated from; escaping has lost or altered data\n"
+        )
+        return 1
+
     values = os.path.join(out_dir, "values")
     os.makedirs(values, exist_ok=True)
     target = os.path.join(values, "cobalt_config.xml")
     with open(target, "w", encoding="utf-8") as fh:
-        fh.write('<?xml version="1.0" encoding="utf-8"?>\n')
-        fh.write("<resources>\n")
-        fh.write(
-            '    <string name="cobalt_renderer_config">%s</string>\n'
-            % to_android_string(raw.strip())
-        )
-        fh.write("</resources>\n")
+        fh.write(rendered)
 
     print("wrote %s" % target)
     return 0

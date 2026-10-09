@@ -7,11 +7,18 @@
   The meta-data entry is the whole integration. parseApkPlugin() reads the
   resource named by "fclPlugin_V2", resolves it through the plugin's own
   resources, and JSON-decodes it into RendererConfig. If the key is missing, or
-  names a resource that does not resolve, the plugin is skipped in silence --
-  which is why the manifest and strings.xml have to agree.
+  names a resource that does not resolve, the plugin is skipped in silence.
+  That is why the manifest and the generated resource have to agree, and why
+  tools/gen-config.py fails the build rather than emitting something malformed.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      No permissions are requested, and none are needed. The renderer is
+      reached through the launcher's own process, not through this APK at
+      runtime; asking for storage access would be a request this app has no way
+      to justify to the user.
+    -->
     <application
         android:allowBackup="false"
         android:icon="@android:drawable/ic_menu_rotate"
