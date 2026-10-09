@@ -192,8 +192,16 @@ def check_version_agreement(repo_root):
     with open(version_file, "r", encoding="utf-8") as fh:
         version = fh.read().strip().removeprefix("v")
 
-    if not re.match(r"^\d+\.\d+\.\d+", version):
-        problems.append("VERSION contains %r, which is not a version" % version)
+    # The same shape plugin/build.gradle.kts requires. Exactly three numeric
+    # components: its versionCode arithmetic destructures three, so "1.2.3.4" would
+    # be accepted by a looser check and silently compute the code for 1.2.3. Kept in
+    # step deliberately -- this reports the bad value and names the file to change,
+    # where Gradle would report a number-format failure from a Kotlin file.
+    if not re.match(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z][0-9A-Za-z.+-]*)?$", version):
+        problems.append(
+            "VERSION contains %r, which is not MAJOR.MINOR.PATCH with an optional "
+            "suffix" % version
+        )
 
     # The release is published under a git tag, so a mismatch means the file and
     # the download the user is holding disagree. Only meaningful on a tag build;

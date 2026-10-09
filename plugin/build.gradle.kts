@@ -17,13 +17,25 @@ plugins {
 // Reading the file is also what keeps the plugin's version from drifting away from
 // the git tag, which is the name the release is published under. tools/check-env.py
 // asserts the two agree.
-val cobaltVersion: String = rootProject.file("VERSION")
-    .readText()
-    .trim()
-    .removePrefix("v")
+//
+// ../VERSION, not rootProject.file("VERSION"): plugin/ is the root project -- there is
+// no settings.gradle.kts above it -- so rootProject is this directory and resolves the
+// path to plugin/VERSION, which does not exist. The first CI run failed with exactly
+// that FileNotFoundException.
+val versionFile = file("../VERSION")
+require(versionFile.isFile) {
+    "VERSION not found at ${versionFile.absolutePath}; it is one level above the plugin"
+}
+val cobaltVersion: String = versionFile.readText().trim().removePrefix("v")
 
-require(Regex("""^\d+\.\d+\.\d+([-+.][0-9A-Za-z.+-]+)?$""").matches(cobaltVersion)) {
-    "VERSION contains '$cobaltVersion', which is not a version"
+// Exactly three numeric components, then an optional pre-release/build suffix. The
+// count is enforced rather than assumed: the versionCode arithmetic below destructures
+// three components, so "1.2.3.4" would pass a "starts with three digits" check and
+// then silently compute the code for 1.2.3. And the components must be numeric, not
+// merely well-shaped, because toInt() would otherwise throw during configuration with a
+// message about a number rather than about the version.
+require(Regex("""^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z][0-9A-Za-z.+-]*)?$""").matches(cobaltVersion)) {
+    "VERSION contains '$cobaltVersion', which is not MAJOR.MINOR.PATCH with an optional suffix"
 }
 
 android {
