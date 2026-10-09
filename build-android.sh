@@ -71,8 +71,16 @@ for f in "$ROOT"/src/*.cpp; do
     # CMake compiles only what CMakeLists.txt lists. A source file that is not
     # listed compiles cleanly, exports nothing, and every symbol check still
     # passes -- so the list entry is added here, not left to be remembered.
+    #
+    # Anchored on gl/mg.cpp, upstream's own spelling, because this step runs
+    # before the rebrand and the list has not been renamed yet. An earlier
+    # version anchored on gl/cobalt.cpp and failed on every run with "not in
+    # CMakeLists.txt after insertion" -- the file was inserted, just not where
+    # the anchor was looking. A third attempt used \\(cobalt\|mg\) to cover
+    # both spellings; GNU sed reads that as a literal inside the group, so it
+    # matched nothing and failed silently instead of loudly.
     if ! grep -q "gl/$b" "$SRC/CMakeLists.txt"; then
-        sed -i "0,/^    gl\/cobalt.cpp$/s//    gl\/cobalt.cpp\n    gl\/$b/" "$SRC/CMakeLists.txt"
+        sed -i "0,/^    gl\/mg\.cpp$/s|    gl/mg\.cpp|    gl/$b\\n&|" "$SRC/CMakeLists.txt"
     fi
     grep -q "gl/$b" "$SRC/CMakeLists.txt" || {
         echo "error: gl/$b is not in CMakeLists.txt after insertion" >&2; exit 1; }
