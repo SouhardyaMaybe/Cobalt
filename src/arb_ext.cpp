@@ -39,6 +39,15 @@
 #include "log.h"
 #include "../gles/loader.h"
 
+// extern "C" is load-bearing, not decoration. These are looked up by dlsym,
+// eglGetProcAddress and SDL_GL_GetProcAddress, which match unmangled names by
+// string. Compiled as C++ without this, a definition of glActiveTextureARB
+// exports as _Z18glActiveTextureARBj and every lookup returns null -- which
+// looks exactly like the original bug, and did: the file compiled cleanly,
+// CMake reported "Built target cobalt", and the audit found 29 of the 30 names
+// still missing.
+extern "C" {
+
 // --- Buffers: GL_ARB_vertex_buffer_object, 1999. ------------------------------
 void glGenBuffersARB(GLsizei n, GLuint *buffers) { glGenBuffers(n, buffers); }
 void glDeleteBuffersARB(GLsizei n, const GLuint *buffers) { glDeleteBuffers(n, buffers); }
@@ -174,3 +183,4 @@ void glGetTexLevelParameteri(GLenum target, GLint level, GLenum pname, GLint *pa
 void glGetInteger(GLenum pname, GLint *data) { glGetIntegerv(pname, data); }
 void glGetFloat(GLenum pname, GLfloat *data) { glGetFloatv(pname, data); }
 void glGetInteger64(GLenum pname, GLint64 *data) { glGetInteger64v(pname, data); }
+} // extern "C"

@@ -41,14 +41,20 @@ for p in "$ROOT"/patches/*.patch; do
     # Absolute path: git -C changes directory before reading the patch file, so
     # a repo-relative one would be looked up inside the submodule, where
     # patches/ does not exist.
-    if git -C ref/mobileglues apply --check -p1 "$p"; then
+    # CI builds three ABIs in one checkout, so the second and third runs find
+    # the patches already applied. That is the normal path, not an error, so
+    # git's "patch does not apply" is expected there and is redirected rather
+    # than left to look like a failure next to the real one below.
+    if git -C ref/mobileglues apply --reverse --check -p1 "$p" 2>/dev/null; then
+        echo "    $(basename "$p")  (already applied)"
+    elif git -C ref/mobileglues apply --check -p1 "$p" 2>/dev/null; then
         git -C ref/mobileglues apply -p1 "$p"
         echo "    $(basename "$p")"
-    elif git -C ref/mobileglues apply --reverse --check -p1 "$p"; then
-        echo "    $(basename "$p")  (already applied)"
     else
-        # Not silenced. "does not apply" on its own is unactionable: the useful
-        # information is the context mismatch git already printed above it.
+        # Re-run without the redirect, so the context mismatch git would have
+        # reported is actually printed. "does not apply" on its own is
+        # unactionable; the three lines of context above it are the diagnosis.
+        git -C ref/mobileglues apply --check -p1 "$p" || true
         echo "error: $(basename "$p") does not apply to ref/mobileglues" >&2
         echo "       patches are written against pristine upstream MobileGlues" >&2
         echo "       $(git -C ref/mobileglues rev-parse --short HEAD)" >&2
