@@ -38,13 +38,20 @@ BUILD="build-android"
 echo "==> Applying Cobalt patches"
 shopt -s nullglob
 for p in "$ROOT"/patches/*.patch; do
-    if git -C ref/mobileglues apply --check -p1 "${p#$ROOT/}" 2>/dev/null; then
-        git -C ref/mobileglues apply -p1 "${p#$ROOT/}"
+    # Absolute path: git -C changes directory before reading the patch file, so
+    # a repo-relative one would be looked up inside the submodule, where
+    # patches/ does not exist.
+    if git -C ref/mobileglues apply --check -p1 "$p"; then
+        git -C ref/mobileglues apply -p1 "$p"
         echo "    $(basename "$p")"
-    elif git -C ref/mobileglues apply --reverse --check -p1 "${p#$ROOT/}" 2>/dev/null; then
+    elif git -C ref/mobileglues apply --reverse --check -p1 "$p"; then
         echo "    $(basename "$p")  (already applied)"
     else
-        echo "error: $p does not apply to ref/mobileglues" >&2
+        # Not silenced. "does not apply" on its own is unactionable: the useful
+        # information is the context mismatch git already printed above it.
+        echo "error: $(basename "$p") does not apply to ref/mobileglues" >&2
+        echo "       patches are written against pristine upstream MobileGlues" >&2
+        echo "       $(git -C ref/mobileglues rev-parse --short HEAD)" >&2
         exit 1
     fi
 done
