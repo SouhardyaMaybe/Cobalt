@@ -39,58 +39,71 @@
 #include "log.h"
 #include "../gles/loader.h"
 
-// extern "C" is load-bearing, not decoration. These are looked up by dlsym,
-// eglGetProcAddress and SDL_GL_GetProcAddress, which match unmangled names by
-// string. Compiled as C++ without this, a definition of glActiveTextureARB
-// exports as _Z18glActiveTextureARBj and every lookup returns null -- which
-// looks exactly like the original bug, and did: the file compiled cleanly,
-// CMake reported "Built target cobalt", and the audit found 29 of the 30 names
-// still missing.
+// Two attributes are load-bearing here, and both were missing at first. Each
+// one produced a file that compiled cleanly, linked cleanly, and exported
+// almost nothing -- and each looked like a different problem from the outside.
+//
+// GLAPI -- this is the real one. The project compiles C++ with
+// -fvisibility=hidden (CMakeLists.txt), so a symbol is not exported from the
+// .so unless something marks it default-visibility. Upstream marks every entry
+// point with GLAPI, which expands to __attribute__((visibility("default")))
+// on anything that is not MSVC or Apple. Without it, 29 of the 30 definitions
+// below compiled, linked and were then dropped from the dynamic symbol table,
+// which is why the audit reported them missing while the build reported
+// success at every step. Nothing in the output mentions visibility.
+//
+// extern "C" -- without it the names are C++-mangled (glActiveTextureARB
+// becomes _Z18glActiveTextureARBj) and every dlsym lookup returns null, since
+// all three of dlsym, eglGetProcAddress and SDL_GL_GetProcAddress match
+// unmangled names by string.
+//
+// Verified on the built library: exported names went 4907 -> 4908, and the one
+// that appeared was the single definition that already carried GLAPI.
 extern "C" {
 
 // --- Buffers: GL_ARB_vertex_buffer_object, 1999. ------------------------------
-void glGenBuffersARB(GLsizei n, GLuint *buffers) { glGenBuffers(n, buffers); }
-void glDeleteBuffersARB(GLsizei n, const GLuint *buffers) { glDeleteBuffers(n, buffers); }
+void GLAPI GLAPIENTRY glGenBuffersARB(GLsizei n, GLuint *buffers) { glGenBuffers(n, buffers); }
+void GLAPI GLAPIENTRY glDeleteBuffersARB(GLsizei n, const GLuint *buffers) { glDeleteBuffers(n, buffers); }
 
 // --- Shaders and programs: GL_ARB_shader_objects, 2002. -----------------------
-void glShaderSourceARB(GLuint shader, GLsizei count, const GLchar *const *string, const GLint *length) {
+void GLAPI GLAPIENTRY glShaderSourceARB(GLuint shader, GLsizei count, const GLchar *const *string, const GLint *length) {
     glShaderSource(shader, count, string, length);
 }
-void glLinkProgramARB(GLuint program) { glLinkProgram(program); }
-void glUniform1iARB(GLint location, GLint v0) { glUniform1i(location, v0); }
+void GLAPI GLAPIENTRY glLinkProgramARB(GLuint program) { glLinkProgram(program); }
+void GLAPI GLAPIENTRY glUniform1iARB(GLint location, GLint v0) { glUniform1i(location, v0); }
 
 // --- Texture units. ------------------------------------------------------------
 // glActiveTexture is hand-written in texture.cpp and validates the unit against
 // MAX_TEXTURE_IMAGE_UNITS, so this is not a no-op: 1.13.2 goes through the ARB
 // name on its hot path and skipping the layer would skip the validation.
-void glActiveTextureARB(GLenum texture) { glActiveTexture(texture); }
+void GLAPI GLAPIENTRY glActiveTextureARB(GLenum texture) { glActiveTexture(texture); }
 
 // --- Framebuffers and renderbuffers: GL_EXT_framebuffer_object, 2005. ---------
 // GL 3.0 renamed every one of these to the unsuffixed form, so on any device
 // that can run 1.17+ the target always exists.
-void glBindFramebufferEXT(GLenum target, GLuint framebuffer) { glBindFramebuffer(target, framebuffer); }
-void glGenFramebuffersEXT(GLsizei n, GLuint *framebuffers) { glGenFramebuffers(n, framebuffers); }
-void glDeleteFramebuffersEXT(GLsizei n, const GLuint *names) { glDeleteFramebuffers(n, names); }
-GLenum glCheckFramebufferStatusEXT(GLenum target) { return glCheckFramebufferStatus(target); }
-void glFramebufferTexture2DEXT(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) {
+void GLAPI GLAPIENTRY glBindFramebufferEXT(GLenum target, GLuint framebuffer) { glBindFramebuffer(target, framebuffer); }
+void GLAPI GLAPIENTRY glGenFramebuffersEXT(GLsizei n, GLuint *framebuffers) { glGenFramebuffers(n, framebuffers); }
+void GLAPI GLAPIENTRY glDeleteFramebuffersEXT(GLsizei n, const GLuint *names) { glDeleteFramebuffers(n, names); }
+GLenum GLAPI GLAPIENTRY glCheckFramebufferStatusEXT(GLenum target) { return glCheckFramebufferStatus(target); }
+void GLAPI GLAPIENTRY glFramebufferTexture2DEXT(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) {
     glFramebufferTexture2D(target, attachment, textarget, texture, level);
 }
-void glFramebufferRenderbufferEXT(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer) {
+void GLAPI GLAPIENTRY glFramebufferRenderbufferEXT(GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer) {
     glFramebufferRenderbuffer(target, attachment, renderbuffertarget, renderbuffer);
 }
-void glBlitFramebufferEXT(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1,
+void GLAPI GLAPIENTRY glBlitFramebufferEXT(GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1,
                           GLint dstY1, GLbitfield mask, GLenum filter) {
     glBlitFramebuffer(srcX0, srcY0, srcX1, srcY1, dstX0, dstY0, dstX1, dstY1, mask, filter);
 }
-void glBindRenderbufferEXT(GLenum target, GLuint renderbuffer) { glBindRenderbuffer(target, renderbuffer); }
-void glGenRenderbuffersEXT(GLsizei n, GLuint *renderbuffers) { glGenRenderbuffers(n, renderbuffers); }
-void glDeleteRenderbuffersEXT(GLsizei n, const GLuint *renderbuffers) {
+void GLAPI GLAPIENTRY glBindRenderbufferEXT(GLenum target, GLuint renderbuffer) { glBindRenderbuffer(target, renderbuffer); }
+void GLAPI GLAPIENTRY glGenRenderbuffersEXT(GLsizei n, GLuint *renderbuffers) { glGenRenderbuffers(n, renderbuffers); }
+void GLAPI GLAPIENTRY glDeleteRenderbuffersEXT(GLsizei n, const GLuint *renderbuffers) {
     glDeleteRenderbuffers(n, renderbuffers);
 }
-void glRenderbufferStorageEXT(GLenum target, GLenum internalformat, GLsizei width, GLsizei height) {
+void GLAPI GLAPIENTRY glRenderbufferStorageEXT(GLenum target, GLenum internalformat, GLsizei width, GLsizei height) {
     glRenderbufferStorage(target, internalformat, width, height);
 }
-void glBlendFuncSeparateEXT(GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha) {
+void GLAPI GLAPIENTRY glBlendFuncSeparateEXT(GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha) {
     glBlendFuncSeparate(sfactorRGB, dfactorRGB, sfactorAlpha, dfactorAlpha);
 }
 
@@ -107,8 +120,8 @@ void glBlendFuncSeparateEXT(GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactor
 
 // glGetProgrami / glGetShaderi were the GL 1.2-era spellings, replaced by
 // glGetProgramiv / glGetShaderiv in GL 2.0. Same query, integer result.
-void glGetProgrami(GLuint program, GLenum pname, GLint *params) { glGetProgramiv(program, pname, params); }
-void glGetShaderi(GLuint shader, GLenum pname, GLint *params) { glGetShaderiv(shader, pname, params); }
+void GLAPI GLAPIENTRY glGetProgrami(GLuint program, GLenum pname, GLint *params) { glGetProgramiv(program, pname, params); }
+void GLAPI GLAPIENTRY glGetShaderi(GLuint shader, GLenum pname, GLint *params) { glGetShaderiv(shader, pname, params); }
 
 // glGetObjectParameteriARB predates the program/shader split. GL never had an
 // unsuffixed glGetObjectParameteri, only the iv form, so there is nothing to
@@ -119,7 +132,7 @@ void glGetShaderi(GLuint shader, GLenum pname, GLint *params) { glGetShaderiv(sh
 // shader-only. An unrecognised pname is tried on both -- it raises
 // GL_INVALID_ENUM on the wrong one, and the value the caller asked for comes
 // back from the right one.
-void glGetObjectParameteriARB(GLuint obj, GLenum pname, GLint *params) {
+void GLAPI GLAPIENTRY glGetObjectParameteriARB(GLuint obj, GLenum pname, GLint *params) {
     if (pname == GL_LINK_STATUS || pname == GL_VALIDATE_STATUS || pname == GL_INFO_LOG_LENGTH) {
         glGetProgramiv(obj, pname, params);
     } else if (pname == GL_COMPILE_STATUS || pname == GL_SHADER_TYPE || pname == GL_SHADER_SOURCE_LENGTH) {
@@ -137,10 +150,10 @@ void glGetObjectParameteriARB(GLuint obj, GLenum pname, GLint *params) {
 // glGetFramebufferAttachmentParameteri is the GL 3.0 name for the query whose
 // unsuffixed form takes a GLint; the EXT form is the 2005 spelling. 1.16.5
 // resolves the EXT one, so both are provided.
-void glGetFramebufferAttachmentParameteri(GLenum target, GLenum attachment, GLenum pname, GLint *params) {
+void GLAPI GLAPIENTRY glGetFramebufferAttachmentParameteri(GLenum target, GLenum attachment, GLenum pname, GLint *params) {
     glGetFramebufferAttachmentParameteriv(target, attachment, pname, params);
 }
-void glGetFramebufferAttachmentParameteriEXT(GLenum target, GLenum attachment, GLenum pname, GLint *params) {
+void GLAPI GLAPIENTRY glGetFramebufferAttachmentParameteriEXT(GLenum target, GLenum attachment, GLenum pname, GLint *params) {
     glGetFramebufferAttachmentParameteriv(target, attachment, pname, params);
 }
 
@@ -153,17 +166,17 @@ void glGetFramebufferAttachmentParameteriEXT(GLenum target, GLenum attachment, G
 // returns when the driver lacks it -- which would leave *params untouched and
 // hand the caller stack garbage. Querying the driver directly keeps the
 // contract: either the driver answers or glGetError reports why it did not.
-void glGetQueryObjecti(GLuint id, GLenum pname, GLint *params) {
+void GLAPI GLAPIENTRY glGetQueryObjecti(GLuint id, GLenum pname, GLint *params) {
     GLuint v;
     glGetQueryObjectuiv(id, pname, &v);
     *params = (GLint)v;
 }
-void glGetQueryObjecti64(GLuint id, GLenum pname, GLint64 *params) {
+void GLAPI GLAPIENTRY glGetQueryObjecti64(GLuint id, GLenum pname, GLint64 *params) {
     if (GLES.glGetQueryObjecti64vEXT) {
         GLES.glGetQueryObjecti64vEXT(id, pname, params);
     }
 }
-void glGetQueryObjectui64(GLuint id, GLenum pname, GLuint64 *params) {
+void GLAPI GLAPIENTRY glGetQueryObjectui64(GLuint id, GLenum pname, GLuint64 *params) {
     if (GLES.glGetQueryObjecti64vEXT) {
         GLint64 v;
         GLES.glGetQueryObjecti64vEXT(id, pname, &v);
@@ -173,14 +186,14 @@ void glGetQueryObjectui64(GLuint id, GLenum pname, GLuint64 *params) {
 
 // glGetTexLevelParameteri queries a texture level directly. Removed in GL 3.0,
 // and with it the only way to ask about a mipmap without a texture object.
-void glGetTexLevelParameteri(GLenum target, GLint level, GLenum pname, GLint *params) {
+void GLAPI GLAPIENTRY glGetTexLevelParameteri(GLenum target, GLint level, GLenum pname, GLint *params) {
     glGetTexLevelParameteriv(target, level, pname, params);
 }
 
 // glGetInteger and glGetFloat read a current-state value. GLES 3 spells these
 // glGetIntegerv and glGetFloatv; the bare names were the desktop-GL forms that
 // never existed in ES.
-void glGetInteger(GLenum pname, GLint *data) { glGetIntegerv(pname, data); }
-void glGetFloat(GLenum pname, GLfloat *data) { glGetFloatv(pname, data); }
-void glGetInteger64(GLenum pname, GLint64 *data) { glGetInteger64v(pname, data); }
+void GLAPI GLAPIENTRY glGetInteger(GLenum pname, GLint *data) { glGetIntegerv(pname, data); }
+void GLAPI GLAPIENTRY glGetFloat(GLenum pname, GLfloat *data) { glGetFloatv(pname, data); }
+void GLAPI GLAPIENTRY glGetInteger64(GLenum pname, GLint64 *data) { glGetInteger64v(pname, data); }
 } // extern "C"
