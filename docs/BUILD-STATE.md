@@ -19,6 +19,44 @@ against the built artifact, not inferred from a passing build.
 - APK is signed (`META-INF/CERT.RSA`), carries all three ABIs, and its
   `resources.arsc` contains the renderer config the launcher reads.
 
+## Cross-check against a renderer that works
+
+`ref/towo-builds/` holds three arm64 builds of a MobileGlues fork that were run
+on this device. They are the only working reference available, so they were used
+to check two decisions rather than reasoning alone.
+
+**Static libc++ is right.** All three link only `libandroid`, `liblog`, `libm`,
+`libdl`, `libc` -- no `libc++_shared`. Upstream's history agrees: `CMakeLists.txt`
+has only ever set `c++_static`, never `c++_shared`. Our first build overrode
+that and could not `dlopen` on device.
+
+**The ARB/EXT additions are real, and larger than upstream's.** TOWO exports
+`glDebugMessageCallbackARB` (the one pair modern versions need, which
+`NATIVE_FUNCTION_HEAD` covers) but not `glActiveTextureARB` or
+`glGenBuffersARB`. All 30 names in `src/arb_ext.cpp` are absent from every TOWO
+build and from upstream's sources, so none can collide at link time.
+
+### The 256-name target is an over-count, and TOWO proves it
+
+TOWO runs Minecraft on this device while lacking 9 of the 256, including all of
+these for 26.3:
+
+    glGetInteger      glGetFloat      glGetInteger64    glGetProgrami
+    glGetShaderi      glGetTexLevelParameteri
+    glGetQueryObjecti glGetQueryObjectui64               glClipControl
+
+None of these are real GL or GLES functions -- `glGetProgrami` and
+`glGetShaderi` have never existed, `glGetInteger` has no `v` form in ES, and
+`glClipControl` is GL 3.2 core, absent from ES. They are strings in LWJGL's
+constant pool that the extraction in `research-mcgl/` matched.
+
+So: a renderer that demonstrably works does not export them, and Minecraft runs.
+The extraction is a string scan, not symbol resolution, and it over-approximates.
+
+Cobalt exports all 256 anyway. That is deliberate and costs a few hundred bytes
+-- an unnecessary symbol is harmless, a missing one is a startup crash -- but the
+figure should be read as "no known gaps", not as "256 are required".
+
 ## Not yet verified
 
 **Nothing has run on a device.** Every check above is static. The first thing to

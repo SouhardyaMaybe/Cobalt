@@ -86,9 +86,20 @@ jobs:
               continue
             fi
             found=$((found + 1))
+            # After stripping. nm -D reads the dynamic symbol table, which
+            # --strip-unneeded leaves alone, so this also proves the strip did not
+            # take the exports with it.
             gl=$(nm -D --defined-only "$so" | grep -cE ' T gl[A-Z]' || true)
             egl=$(nm -D --defined-only "$so" | grep -cE ' T egl' || true)
             echo "== $abi: gl*=$gl egl*=$egl $(du -h "$so" | cut -f1) =="
+            # Size floor. The three stripped builds in ref/towo-builds/ are 5.9 MB
+            # each; an unstripped build of the same renderer is 54 MB. This is a
+            # backstop against the strip step silently not running, not a target.
+            mb=$(( $(stat -c%s "$so") / 1048576 ))
+            if [ "$mb" -gt 12 ]; then
+              echo "::error::$abi is ${mb}MB; expected ~6MB stripped. The strip step did not run."
+              fail=1
+            fi
             # The renderer exports far more than this. These are floors, not
             # targets: they catch a build that stopped translating rather than
             # one that lost a handful of entry points.
@@ -115,6 +126,31 @@ jobs:
               echo "::error::$abi exports glGetError $n times; 26.3 needs one address"
               fail=1
             fi
+            # Undefined symbols are the one class of defect that a symbol-presence
+            # check cannot see: a .so can export all 4937 names correctly and
+            # still fail to dlopen because something it *needs* is missing.
+            #
+            # That is exactly what c++_shared produced. libc++_shared.so is in
+            # neither the APK nor LD_LIBRARY_PATH -- a plugin's lib directory is
+            # never added to it -- so the library failed on its first C++ symbol:
+            #
+            #   cannot locate symbol "_ZTVNSt6__ndk119basic_ostringstreamIcE..."
+            #
+            # on device, after an entirely green build. Only libc++/STL symbols
+            # are checked: everything else undefined is legitimately resolved
+            # from libandroid/libm/libc/libdl, which are in the NEEDED list.
+            undef=$(nm -D --undefined-only "$so" | awk '{print $2}' \
+                | grep -cE '^_Z.*(ndk1|St[0-9])' || true)
+            if [ "$undef" -ne 0 ]; then
+              echo "::error::$abi has $undef undefined C++ runtime symbol(s); the library will fail to dlopen"
+              echo "::error::    is libc++_shared.so in NEEDED? $(readelf -dW "$so" | grep -c libc++_shared)"
+              fail=1
+            fi
+            if readelf -dW "$so" | grep -q libc++_shared; then
+              echo "::error::$abi links libc++_shared, which no plugin can resolve"
+              fail=1
+            fi
+
             # A renamed renderer must not still answer to the old name in the
             # strings a game reads.
             if nm -D --defined-only "$so" | grep -qi 'mobileglues'; then

@@ -77,26 +77,61 @@ def validate(cfg, path):
             "eglBindAPI(EGL_OPENGL_API). Android answers EGL_BAD_API (0x300c)."
         )
 
-    # LD_LIBRARY_PATH is built from the V1 plugin list, so a V2 plugin's lib
-    # directory is never added to it. A bare filename therefore cannot dlopen.
-    for key in ("rendererGLPath", "rendererEGLPath"):
-        val = cfg.get(key, "")
-        if isinstance(val, str) and not val.startswith("**|") and not val.startswith("/"):
-            problems.append(
-                "%s is %r, a bare name. A V2 plugin's nativeLibraryDir is not on "
-                "LD_LIBRARY_PATH, so it must be an absolute path via the '**|' "
-                "prefix." % (key, val)
-            )
-
-    # One library for both roles: the launcher loads it as the EGL
-    # implementation and resolves GL through its own eglGetProcAddress, so two
-    # libraries would give one symbol two addresses -- which is exactly what
-    # Minecraft 26.3 refuses to start on.
-    if cfg.get("rendererGLPath") != cfg.get("rendererEGLPath"):
+    # rendererGLPath is dlopen'd verbatim by both the launcher and LWJGL, via
+    # -Dorg.lwjgl.opengl.libname. A V2 plugin's nativeLibraryDir is never added to
+    # LD_LIBRARY_PATH -- getLibraryPath() includes only the *V1* plugin list -- so
+    # a bare filename cannot resolve. This one must be absolute, via "**|".
+    gl_path = cfg.get("rendererGLPath", "")
+    if not (isinstance(gl_path, str) and (gl_path.startswith("**|") or gl_path.startswith("/"))):
         problems.append(
-            "rendererGLPath and rendererEGLPath differ (%r vs %r). They must be "
-            "the same library so each GL symbol has exactly one address."
-            % (cfg.get("rendererGLPath"), cfg.get("rendererEGLPath"))
+            "rendererGLPath is %r. LD_LIBRARY_PATH is built from the V1 plugin "
+            "list, so a V2 plugin's lib directory is not on it and a bare "
+            "filename cannot be dlopen'd. Use the '**|' prefix." % gl_path
+        )
+
+    # rendererEGLPath must be a BARE filename -- the opposite of rendererGLPath.
+    #
+    # setRendererEnv() consumes this one twice, and the two consumers want
+    # different things:
+    #
+    #     envMap["POJAVEXEC_EGL"] = eglName
+    #     envMap["SDL_EGL_LIBRARY"] = "$nativeLibPath/$eglName"
+    #
+    # The second prepends nativeLibPath unconditionally, so an absolute
+    # rendererEGLPath yields a doubled path. The first device run showed exactly
+    # that:
+    #
+    #     SDL_EGL_LIBRARY = /data/app/.../lib/arm64//data/app/.../libcobalt.so
+    #
+    # SDL cannot load a doubled path, falls back to the system EGL, and 26.3 then
+    # fails its glGetError address check for precisely that reason.
+    #
+    # POJAVEXEC_EGL therefore cannot carry the absolute path. The EGL bridge gets
+    # one through LIBGL_GLES instead: egl_loader.c reads it first and prefers it
+    # over POJAVEXEC_EGL, and Zalith never sets it, so a value from this config
+    # survives.
+    egl_path = cfg.get("rendererEGLPath", "")
+    if not (isinstance(egl_path, str) and "/" not in egl_path):
+        problems.append(
+            "rendererEGLPath is %r. The launcher builds SDL_EGL_LIBRARY as "
+            "'$nativeLibPath/$rendererEGLPath', so an absolute value becomes a "
+            "doubled path. Use a bare filename here and put the absolute path in "
+            "LIBGL_GLES." % egl_path
+        )
+
+    # One library for both roles: the launcher loads it as the EGL implementation
+    # and resolves GL through its own eglGetProcAddress, so a separate EGL shim
+    # would give one symbol two addresses -- exactly what Minecraft 26.3 refuses
+    # to start on. Compared by filename, since the two fields now legitimately
+    # differ in form.
+    def _basename(v):
+        return str(v).replace("**|", "").rsplit("/", 1)[-1]
+
+    if _basename(egl_path) != _basename(gl_path):
+        problems.append(
+            "rendererGLPath (%r) and rendererEGLPath (%r) name different "
+            "libraries. They must be the same one so each GL symbol has exactly "
+            "one address." % (gl_path, egl_path)
         )
 
     for i, entry in enumerate(cfg.get("env", []) or []):
@@ -122,6 +157,19 @@ def validate(cfg, path):
         problems.append(
             "env has no LIBGL_ES. It becomes EGL_CONTEXT_CLIENT_VERSION; unset "
             "defaults to 2 and no 1.13+ Minecraft runs on an ES 2 context."
+        )
+    if "LIBGL_GLES" not in keys:
+        problems.append(
+            "env has no LIBGL_GLES. egl_loader.c reads it in preference to "
+            "POJAVEXEC_EGL, and it is the only way to hand the EGL bridge an "
+            "absolute library path once rendererEGLPath is a bare filename. "
+            "Without it the bridge falls back to the system EGL."
+        )
+    if "SDL_EGL_LIBRARY" in keys:
+        problems.append(
+            "env sets SDL_EGL_LIBRARY, but the launcher overwrites it afterwards "
+            "with '$nativeLibPath/$rendererEGLPath'. Setting it here has no "
+            "effect and hides which value is actually in force."
         )
 
     return problems

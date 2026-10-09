@@ -2,13 +2,13 @@
   "displayName": "Cobalt Wrapper",
   "rendererId": "opengles3",
   "rendererGLPath": "**|libcobalt.so",
-  "rendererEGLPath": "**|libcobalt.so",
+  "rendererEGLPath": "libcobalt.so",
   "dlopenLibPaths": [],
   "env": [
     { "type": "NormalEnv", "key": "LIBGL_ES", "value": "3" },
     { "type": "NormalEnv", "key": "SDL_OPENGL_LIBRARY", "value": "**|libcobalt.so" },
-    { "type": "NormalEnv", "key": "SDL_EGL_LIBRARY", "value": "**|libcobalt.so" },
     { "type": "NormalEnv", "key": "SDL_VIDEO_DRIVER", "value": "android" },
+    { "type": "NormalEnv", "key": "LIBGL_GLES", "value": "**|libcobalt.so" },
     { "type": "NormalEnv", "key": "CB_DIR_PATH", "value": "**|cobalt" },
     { "type": "NormalEnv", "key": "CB_COUNT_LAUNCH", "value": "1" }
   ],

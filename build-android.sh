@@ -108,7 +108,21 @@ cmake -B "$BUILD" -S "$SRC" \
     -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
     -DANDROID_ABI="$COBALT_ABI" \
     -DANDROID_PLATFORM="android-$API" \
-    -DANDROID_STL="c++_shared" \
+    # c++_static, not c++_shared, and not by preference.
+    #
+    # A shared-libc++ build puts "NEEDED libc++_shared.so" in the .so and leaves
+    # every __ndk1 symbol undefined. That library is in neither the APK nor
+    # LD_LIBRARY_PATH -- a plugin's lib directory is not on it -- so dlopen
+    # fails on the first C++ symbol it touches:
+    #
+    #   cannot locate symbol "_ZTVNSt6__ndk119basic_ostringstreamIcE..."
+    #
+    # which is what the first device run reported. Static libc++ embeds the
+    # symbols; it costs a couple of MB per ABI and needs nothing from the host.
+    #
+    # Upstream's CMakeLists also says c++_static, so this matches it rather than
+    # overriding it.
+    -DANDROID_STL="c++_static" \
     -DCMAKE_BUILD_TYPE=Release \
     -DPROFILING=OFF
 
@@ -135,6 +149,17 @@ if [ ! -f "$SO" ]; then
     exit 1
 fi
 install -m 755 "$SO" "$ROOT/$OUT/$COBALT_ABI/libcobalt.so"
+
+# Strip. The build carries -g (upstream puts it in CMAKE_CXX_FLAGS), which leaves
+# roughly 48 MB of DWARF per ABI: 54 MB here against 5.9 MB for the stripped
+# TOWO builds of the same renderer that run on this device.
+#
+# Only --strip-unneeded, which removes debug and symbol-table entries but keeps
+# the dynamic symbol table. That table is the product -- dlsym resolves glGetError
+# and 4900 other names through it -- so this cannot use plain --strip.
+strip_tool="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+[ -x "$strip_tool" ] || strip_tool=$(command -v llvm-strip || command -v strip)
+"$strip_tool" --strip-unneeded "$ROOT/$OUT/$COBALT_ABI/libcobalt.so"
 
 # Reports the ABI that was just built, not all three. CI invokes this once per
 # ABI, so asserting the others are present here failed on the first invocation
