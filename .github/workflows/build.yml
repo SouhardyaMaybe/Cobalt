@@ -332,34 +332,47 @@ jobs:
           print("renderer settings: staged for all three ABIs")
           PY
 
-      # The version the APK reports is a build input that stayed hardcoded at 0.1.0
-      # for six releases, so v0.3.2's own App info screen said 0.1.0 and no check
-      # noticed: the build faithfully produced the artifact it was asked for. Read
-      # back out of the built APK rather than out of VERSION, because the thing that
-      # was wrong is the artifact.
-          python3 - "$(apk)" VERSION <<'PY'
-          import re, sys, zipfile
-          # The binary manifest stores versionCode and versionName as a string pool;
-          # aapt is the reliable reader and is on the runner.
-          apk, version_file = sys.argv[1], sys.argv[2]
-          expected = open(version_file).read().strip().removeprefix("v")
-          out = subprocess.run(
-              ["$ANDROID_HOME/build-tools/34.0.0/aapt", "dump", "badging", apk],
-              capture_output=True, text=True, check=True).stdout
-          name = re.search(r"^versionName='([^']*)'", out, re.M)
-          code = re.search(r"^versionCode='([^']*)'", out, re.M)
-          if not name or not code:
-              sys.exit("aapt reported no version; the check cannot run")
-          print("APK reports: %s (%s)" % (name.group(1), code.group(1)))
-          if name.group(1) != expected:
-              sys.exit("APK says versionName=%s but VERSION says %s"
-                       % (name.group(1), expected))
-          major, minor, patch = expected.split("-")[0].split("+")[0].split(".")
-          want_code = int(major) * 10000 + int(minor) * 100 + int(patch)
-          if int(code.group(1)) != want_code:
-              sys.exit("APK says versionCode=%s but %s maps to %d"
-                       % (code.group(1), expected, want_code))
-          PY
+          # The version the APK reports was hardcoded at 0.1.0 for six releases, so
+          # v0.3.2's own App info screen said 0.1.0 and no check noticed: the build
+          # faithfully produced the artifact it was asked for. Read back out of the
+          # built APK rather than out of VERSION, because the thing that was wrong is
+          # the artifact.
+          #
+          # aapt rather than a hand-rolled binary-manifest parser: versionCode and
+          # versionName live in the manifest's string pool, and reading them directly
+          # means encoding that pool's UTF-16 offsets.
+          #
+          # Located rather than assumed. GitHub's ubuntu runner has the Android SDK
+          # but does not put aapt on PATH, and the build-tools version is whatever the
+          # image shipped. A bare `aapt` here would be a check that passes by not
+          # existing, so the path is resolved from the environment and a missing aapt
+          # is a hard error instead of a skip.
+          aapt=""
+          for c in "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/build-tools/*/aapt \
+                   "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/cmdline-tools/*/bin/aapt; do
+            if [ -x "$c" ]; then aapt="$c"; break; fi
+          done
+          if [ -z "$aapt" ]; then
+            echo "::error::no aapt found under ${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools"
+            echo "::error::the version check cannot run, and an unverified version is the bug it exists to catch"
+            exit 1
+          fi
+          echo "using $aapt"
+          want=$(cat VERSION | tr -d '[:space:]' | sed 's/^v//')
+          got=$("$aapt" dump badging "$apk" \
+                | sed -n "s/^package: name='[^']*' versionCode='\([^']*\)' versionName='\([^']*\)'.*/\1 \2/p")
+          [ -n "$got" ] || { echo "::error::aapt reported no version; the check cannot run"; exit 1; }
+          echo "APK reports: versionCode=$(echo "$got" | cut -d' ' -f1) versionName=$(echo "$got" | cut -d' ' -f2)"
+          [ "$(echo "$got" | cut -d' ' -f2)" = "$want" ] || {
+            echo "::error::APK reports versionName=$(echo "$got" | cut -d' ' -f2), VERSION says $want"
+            exit 1; }
+          # Same arithmetic plugin/build.gradle.kts derives versionCode from.
+          want_code=$(echo "$want" | cut -d- -f1 | cut -d+ -f1 \
+            | awk -F. '{printf "%d", $1*10000 + $2*100 + $3}')
+          [ "$(echo "$got" | cut -d' ' -f1)" = "$want_code" ] || {
+            echo "::error::APK reports versionCode=$(echo "$got" | cut -d' ' -f1), $want maps to $want_code"
+            exit 1; }
+          echo "version matches VERSION ($want)"
 
       - uses: actions/upload-artifact@v4
         if: always()
