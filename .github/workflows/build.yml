@@ -201,6 +201,26 @@ jobs:
       - name: Check the launcher environment
         run: python3 tools/check-env.py
 
+      # Every #include in src/*.cpp and patches/ must resolve to a file we
+      # ship. The failure mode otherwise is a bare "fatal error: 'x.h' file not
+      # found" naming a header nobody in this repository has heard of.
+      - name: Check that shipped sources are self-contained
+        run: |
+          set -euo pipefail
+          fail=0
+          for f in src/*.cpp; do
+            for inc in $(grep -oE '#include "[^"]+"' "$f" | sed 's/#include "//;s/"//'); do
+              case "$inc" in
+                ../*) continue ;;   # upstream's own headers, resolved in-tree
+              esac
+              if [ ! -f "ref/mobileglues/MobileGlues-cpp/gl/$inc" ] && [ ! -f "src/$inc" ]; then
+                echo "::error::$f includes \"$inc\", which is neither in src/ nor upstream"
+                fail=1
+              fi
+            done
+          done
+          exit $fail
+
       - name: Generate the signing key
         run: ./tools/gen-key.sh
 

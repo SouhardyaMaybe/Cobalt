@@ -71,6 +71,16 @@ done
 # the rebrand, so tools/rebrand.py sees them like any other source.
 echo "==> Adding Cobalt sources"
 shopt -s nullglob
+
+# Headers first, and separately: they are #included by the sources below and by
+# patches/0002, so a source can compile without its own header in place only if
+# the header happens to already exist. They must not go into CMakeLists -- CMake
+# compiles only .c/.cpp, and a header listed there is an error.
+for f in "$ROOT"/src/*.h; do
+    cp "$f" "$SRC/gl/$(basename "$f")"
+    echo "    gl/$(basename "$f")"
+done
+
 for f in "$ROOT"/src/*.cpp; do
     b=$(basename "$f")
     cp "$f" "$SRC/gl/$b"
