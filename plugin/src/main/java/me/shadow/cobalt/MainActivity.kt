@@ -3,7 +3,6 @@ package me.shadow.cobalt
 import android.app.Activity
 import android.os.Bundle
 import android.widget.TextView
-import java.io.File
 
 /**
  * The plugin's only activity, and the only reason it exists: the launcher finds
@@ -24,6 +23,12 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
 
         val libDir = applicationInfo.nativeLibraryDir
+        // Written before the report is built, so a settings failure is shown here
+        // rather than discovered later as the renderer silently using defaults.
+        val settingsNotes = StringBuilder()
+        val settings = CobaltSettings.install(this, settingsNotes)
+        CobaltSettings.describe(this, settings)
+
         val report = buildString {
             appendLine("Cobalt Wrapper")
             appendLine()
@@ -31,16 +36,24 @@ class MainActivity : Activity() {
             appendLine()
             appendLine("Libraries in $libDir")
             for (abi in listOf("arm64-v8a", "armeabi-v7a", "x86_64")) {
-                val f = File("$libDir/$abi/${CobaltConfig.LIBRARY}")
+                val f = java.io.File("$libDir/$abi/${CobaltConfig.LIBRARY}")
                 appendLine("  %-12s %s".format(abi, if (f.isFile) "present" else "MISSING"))
             }
             appendLine()
             appendLine("Config and logs")
-            appendLine("  ${File(libDir, "cobalt")}")
+            appendLine("  ${java.io.File(libDir, "cobalt")}")
+            append(settingsNotes)
+            appendLine("  %-12s %s".format(
+                "config.json",
+                if (settings != null) "installed (${settings.length()} bytes)" else "MISSING",
+            ))
             appendLine()
             appendLine("A MISSING library means the renderer build did not stage it.")
             appendLine("The launcher will still list this plugin, then fail to load at")
             appendLine("launch. See .github/workflows/build.yml, 'Audit the exported ABI'.")
+            appendLine()
+            appendLine("A MISSING config.json means the renderer falls back to defaults:")
+            appendLine("maxGlslCacheSize becomes 0 and the shader cache is disabled.")
         }
 
         setContentView(TextView(this).apply { text = report })

@@ -168,9 +168,13 @@ if [ ! -f "$SO" ]; then
 fi
 install -m 755 "$SO" "$ROOT/$OUT/$COBALT_ABI/libcobalt.so"
 
-# The renderer's own settings, read at startup from CB_DIR_PATH/config.json.
+# The renderer's own settings. NOT staged into jniLibs: AGP packs that directory by
+# extension, so only .so survives and a config.json placed there is dropped without a
+# warning. It ships as an asset and CobaltSettings.install() copies it to
+# nativeLibraryDir/cobalt/config.json on first launch, which is the only place the
+# renderer can actually read it from.
 #
-# Not shipping this is what produced:
+# Not shipping this at all is what produced:
 #
 #     Failed to load config. Use default config.
 #     [Cobalt] Setting: maxGlslCacheSize            = 0
@@ -181,16 +185,9 @@ install -m 755 "$SO" "$ROOT/$OUT/$COBALT_ABI/libcobalt.so"
 # visible cost was maxGlslCacheSize = 0, which turns off the shader cache and with it
 # the negative cache from patches/0001, so a shader that fails to compile is retried on
 # every resource reload.
-#
-# CB_DIR_PATH is "**|cobalt", so this lands in the plugin's nativeLibraryDir/cobalt
-# next to libcobalt.so. Staged per ABI because jniLibs/<abi> is what Android unpacks.
-#
-# The settings are the defaults the renderer already falls back to, except where a
-# comment in the file says otherwise -- so shipping it stops the warning and switches
-# the shader cache on without otherwise changing behaviour.
-echo "==> Staging the renderer config"
+echo "==> Staging the renderer settings as an asset"
 install -D -m 644 "$ROOT/plugin/config/cobalt-settings.json" \
-    "$ROOT/$OUT/$COBALT_ABI/cobalt/config.json"
+    "$ROOT/plugin/src/main/assets/cobalt-settings.json"
 
 # Strip. The build carries -g (upstream puts it in CMAKE_CXX_FLAGS), which leaves
 # roughly 48 MB of DWARF per ABI: 54 MB here against 5.9 MB for the stripped

@@ -254,6 +254,12 @@ jobs:
       - name: Test the renderer settings
         run: ./tools/test-config.sh
 
+      # The file IO behind CobaltSettings.install(). Skips when no Kotlin compiler is
+      # in the Gradle cache, which is the normal case before a build; the Gradle build
+      # itself is the real compile check for this code.
+      - name: Test the settings install
+        run: ./tools/test-settings-install.sh
+
       # Every #include in src/*.cpp and patches/ must resolve to a file we
       # ship. The failure mode otherwise is a bare "fatal error: 'x.h' file not
       # found" naming a header nobody in this repository has heard of.
@@ -317,19 +323,25 @@ jobs:
                   sys.exit("resources.arsc is missing %r; the launcher would not find the config" % probe)
           print("renderer config resource: present")
 
-          # The renderer's own config.json, read at startup from
-          # nativeLibraryDir/cobalt. Missing it is not an install error: the renderer
-          # falls back to defaults and logs "Failed to load config", which cost
-          # maxGlslCacheSize = 0 and with it the negative shader cache. Nothing else
-          # noticed, because every other artefact is still correct.
+          # The renderer's own settings, as an asset. CobaltSettings.install() copies this to
+          # nativeLibraryDir/cobalt/config.json on first launch, which is the only place
+          # the renderer can read it from -- it cannot live under lib/, because AGP packs
+          # jniLibs by extension and would drop a .json there without saying so. That is
+          # what the previous version of this check got wrong: it asserted a
+          # lib/<abi>/cobalt/config.json that AGP never packaged, so it failed on a
+          # correct build.
+          #
+          # Checked here so the failure is a build failure with a file named, rather than
+          # a renderer quietly running on defaults -- which costs maxGlslCacheSize = 0,
+          # and with it the negative shader cache.
+          asset = "assets/cobalt-settings.json"
+          if asset not in names:
+              sys.exit("%s is missing; the renderer will fall back to defaults and "
+                       "disable the shader cache" % asset)
           shipped = open("plugin/config/cobalt-settings.json", "rb").read()
-          for abi in ("arm64-v8a", "armeabi-v7a", "x86_64"):
-              entry = "lib/%s/cobalt/config.json" % abi
-              if entry not in names:
-                  sys.exit("%s is missing; the renderer will fall back to defaults" % entry)
-              if z.read(entry) != shipped:
-                  sys.exit("%s differs from plugin/config/cobalt-settings.json" % entry)
-          print("renderer settings: staged for all three ABIs")
+          if z.read(asset) != shipped:
+              sys.exit("%s differs from plugin/config/cobalt-settings.json" % asset)
+          print("renderer settings: packaged as an asset")
           PY
 
           # The version the APK reports was hardcoded at 0.1.0 for six releases, so
