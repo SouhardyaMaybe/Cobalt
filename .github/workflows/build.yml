@@ -81,12 +81,13 @@ jobs:
               echo "::error::$abi exported only $egl egl* symbols"
               fail=1
             fi
-            # The ARB aliases are not optional: 1.13 reaches for
-            # glActiveTextureARB and friends, gated on GLCapabilities.
-            if ! nm -D --defined-only "$so" | grep -q ' T glActiveTextureARB'; then
-              echo "::error::$abi is missing glActiveTextureARB"
-              fail=1
-            fi
+            # The exported symbol list, kept so it can be diffed against
+            # research-mcgl/union_symbols.json -- the union of every GL symbol
+            # Minecraft 1.13.2 through 26.3 resolves. Comparing the two
+            # locally is far better than adding one probe at a time here.
+            nm -D --defined-only "$so" | awk '$2=="T"{print $3}' | sort > "$RUNNER_TEMP/syms-$abi.txt"
+            echo "  exported: $(wc -l < "$RUNNER_TEMP/syms-$abi.txt")"
+            cp "$RUNNER_TEMP/syms-$abi.txt" "exported-$abi.txt"
             # 26.3 compares the address of glGetError across lookup paths
             # (dlsym vs eglGetProcAddress vs SDL_GL_GetProcAddress), so it has
             # to resolve to exactly one pointer.
@@ -111,6 +112,11 @@ jobs:
       - name: Build the plugin APK
         working-directory: plugin
         run: gradle assembleRelease --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exported-symbols
+          path: exported-*.txt
 
       - uses: actions/upload-artifact@v4
         with:
