@@ -198,6 +198,32 @@ jobs:
       # The launcher env the game will see, reconstructed from our config. The
       # first device run showed a doubled SDL_EGL_LIBRARY that no other check
       # would have seen, so this is asserted rather than left to a human read.
+      # src/ replaces entry points that upstream declared via NATIVE_FUNCTION_HEAD,
+      # so two things have to hold and neither is obvious:
+      #
+      #   1. Upstream's declaration is gone, or it is a duplicate symbol at link.
+      #   2. Our replacement emits the ##ARB alias the macro used to emit.
+      #
+      # (2) is the one that actually happened. The replacement compiled, linked
+      # and passed every check; glCompileShaderARB was simply gone, and only the
+      # 256-name audit caught it. Both are now asserted before the build starts
+      # rather than ten minutes in.
+      - name: Check that replaced entry points keep their aliases
+        run: |
+          set -euo pipefail
+          fail=0
+          for sym in glCompileShader; do
+            if grep -rq "NATIVE_FUNCTION_HEAD(void, $sym," ref/mobileglues/MobileGlues-cpp/gl/; then
+              echo "::error::upstream still declares $sym; src/ defines it too (duplicate symbol)"
+              fail=1
+            fi
+            if ! grep -rq "alias(\"$sym\")" src/; then
+              echo "::error::src/ does not emit ${sym}ARB; NATIVE_FUNCTION_HEAD used to"
+              fail=1
+            fi
+          done
+          exit $fail
+
       - name: Check the launcher environment
         run: python3 tools/check-env.py
 
@@ -218,20 +244,6 @@ jobs:
                 fail=1
               fi
             done
-          done
-          exit $fail
-
-      # src/ replaces glCompileShader, so upstream's declaration must be gone.
-      # A duplicate is a link error ten minutes into the build; this is a grep.
-      - name: Check that replaced entry points are not also defined upstream
-        run: |
-          set -euo pipefail
-          fail=0
-          for sym in glCompileShader; do
-            if grep -rq "NATIVE_FUNCTION_HEAD(void, $sym," ref/mobileglues/MobileGlues-cpp/gl/; then
-              echo "::error::upstream still declares $sym; src/ defines it too"
-              fail=1
-            fi
           done
           exit $fail
 
