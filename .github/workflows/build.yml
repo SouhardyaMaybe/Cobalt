@@ -219,6 +219,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # --clobber rather than create. Re-running a tag's build is normal --
+          # moving a tag to a fix commit, or a rebuild after a transient failure
+          # -- and "a release with the same tag name already exists" turned
+          # every one of those into a red build after all the real work had
+          # already passed. Clobbering overwrites the notes and assets for that
+          # tag, which is the intended outcome when a tag is re-run.
           gh release create "$GITHUB_REF_NAME" \
             plugin/build/outputs/apk/release/*.apk \
-            --generate-notes
+            --generate-notes --clobber
