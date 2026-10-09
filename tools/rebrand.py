@@ -99,10 +99,18 @@ RENAMES = [
     ("MobileGlues", "Cobalt"),
     ("mobileglues", "cobalt"),
 
-    # --- includes and the build file that name the renamed files.
-    ('"mg.h"', '"cobalt.h"'),
-    ("gl/mg.cpp", "gl/cobalt.cpp"),
-]
+    ]
+
+# References to the renamed files, in every form they appear. A plain string
+# replacement cannot cover these: the includes are spelled "../mg.h", "../gl/mg.h"
+# and "gl/mg.h" depending on the including file's depth, plus a bare "mg.h" from
+# inside gl/ itself, and CMakeLists.txt names gl/mg.cpp. Missing one compiles
+# nothing and fails with a file-not-found that points at the wrong file.
+#
+# The lookbehind stops the match at a path boundary, so a hypothetical
+# "foo_mg.h" is left alone. 3rdparty is never walked, so no vendored project is
+# affected by this or any other rule above.
+RENAMED_FILES = re.compile(r"(?<![A-Za-z0-9_.])mg\.(h|cpp)\b")
 
 # Lowercase C-style identifiers. Applied after RENAMES so that the compound
 # CamelCase names above are already gone, and word-bounded so that a substring
@@ -147,6 +155,7 @@ def rebrand_text(text):
             new = new.replace(old, rep)
         new = LOWERCASE_PREFIX.sub("cb_", new)
         new = UPPERCASE_PREFIX.sub("CB_", new)
+        new = RENAMED_FILES.sub(r"cobalt.\1", new)
         out.append(new)
     return "".join(out)
 
