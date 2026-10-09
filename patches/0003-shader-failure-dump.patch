@@ -1,0 +1,41 @@
+diff --git a/MobileGlues-cpp/gl/gl_native.cpp b/MobileGlues-cpp/gl/gl_native.cpp
+index 9c0ec31..33dac24 100644
+--- a/MobileGlues-cpp/gl/gl_native.cpp
++++ b/MobileGlues-cpp/gl/gl_native.cpp
+@@ -35,7 +35,10 @@ NATIVE_FUNCTION_HEAD(void, glClearColor, GLfloat red, GLfloat green, GLfloat blu
+ NATIVE_FUNCTION_HEAD(void, glClearDepthf, GLfloat d) NATIVE_FUNCTION_END_NO_RETURN(void, glClearDepthf, d)
+ NATIVE_FUNCTION_HEAD(void, glClearStencil, GLint s) NATIVE_FUNCTION_END_NO_RETURN(void, glClearStencil, s)
+ NATIVE_FUNCTION_HEAD(void, glColorMask, GLboolean red, GLboolean green, GLboolean blue, GLboolean alpha) NATIVE_FUNCTION_END_NO_RETURN(void, glColorMask, red,green,blue,alpha)
+-NATIVE_FUNCTION_HEAD(void, glCompileShader, GLuint shader) NATIVE_FUNCTION_END_NO_RETURN(void, glCompileShader, shader)
++// glCompileShader is defined in Cobalt's src/shader_dump.cpp, which wraps this
++// call to dump the shader when the driver rejects it. Upstream declared it
++// here as a bare NATIVE_FUNCTION passthrough; keeping both would be a
++// duplicate symbol.
+ NATIVE_FUNCTION_HEAD(void, glCompressedTexImage2D, GLenum target, GLint level, GLenum internalformat, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void *data) NATIVE_FUNCTION_END_NO_RETURN(void, glCompressedTexImage2D, target,level,internalformat,width,height,border,imageSize,data)
+ NATIVE_FUNCTION_HEAD(void, glCompressedTexSubImage2D, GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLsizei imageSize, const void *data) NATIVE_FUNCTION_END_NO_RETURN(void, glCompressedTexSubImage2D, target,level,xoffset,yoffset,width,height,format,imageSize,data)
+ //NATIVE_FUNCTION_HEAD(void, glCopyTexImage2D, GLenum target, GLint level, GLenum internalformat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border) NATIVE_FUNCTION_END_NO_RETURN(void, glCopyTexImage2D, target,level,internalformat,x,y,width,height,border)
+diff --git a/MobileGlues-cpp/gl/shader.cpp b/MobileGlues-cpp/gl/shader.cpp
+index cf4043d..6cda2c8 100644
+--- a/MobileGlues-cpp/gl/shader.cpp
++++ b/MobileGlues-cpp/gl/shader.cpp
+@@ -10,6 +10,7 @@
+ 
+ #include <GL/gl.h>
+ #include "log.h"
++#include "shader_dump.h"
+ #include "program.h"
+ #include "../gles/loader.h"
+ #include "../includes.h"
+@@ -76,6 +77,12 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar* const* string, c
+ 
+     bool is_sampler_buffer_emulated = hardware->emulate_texture_buffer && check_if_sampler_buffer_used(glsl_src);
+ 
++    // Hand the unmodified source to the failure dumper. This must happen before
++    // the translation below, which overwrites the single global shaderInfo --
++    // Minecraft compiles a vertex and a fragment shader back to back, so without
++    // this the fragment dump would show the vertex's source.
++    cobalt_remember_shader_source(shader, glsl_src.c_str());
++
+     if (is_direct_shader(glsl_src.c_str())) {
+         LOG_D("[INFO] [Shader] Direct shader source: ")
+         LOG_D("%s", glsl_src.c_str())

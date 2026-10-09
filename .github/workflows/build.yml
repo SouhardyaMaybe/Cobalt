@@ -221,6 +221,20 @@ jobs:
           done
           exit $fail
 
+      # src/ replaces glCompileShader, so upstream's declaration must be gone.
+      # A duplicate is a link error ten minutes into the build; this is a grep.
+      - name: Check that replaced entry points are not also defined upstream
+        run: |
+          set -euo pipefail
+          fail=0
+          for sym in glCompileShader; do
+            if grep -rq "NATIVE_FUNCTION_HEAD(void, $sym," ref/mobileglues/MobileGlues-cpp/gl/; then
+              echo "::error::upstream still declares $sym; src/ defines it too"
+              fail=1
+            fi
+          done
+          exit $fail
+
       - name: Generate the signing key
         run: ./tools/gen-key.sh
 

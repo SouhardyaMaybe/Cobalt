@@ -1,55 +1,26 @@
-Cobalt Wrapper v0.2.0
+Cobalt Wrapper v0.2.1
 
-Fixes the two bugs reported from the first device run. v0.1.0 built cleanly and
-could not be loaded.
+Adds a diagnostic switch. The renderer itself is unchanged from v0.2.0.
 
-libc++: the library could not be dlopen'd
+The 26.3 run reached the shader path and failed there:
 
-  cannot locate symbol "_ZTVNSt6__ndk119basic_ostringstreamIcE..."
+  ERROR: 0:224: '_uniform' : undeclared identifier
+  ERROR: 0:224: '_instance_00_00' : Syntax error:  syntax error
 
-The build passed -DANDROID_STL=c++_shared, which puts "NEEDED libc++_shared.so"
-in the .so and leaves 118 __ndk1 symbols undefined. That library is in neither
-the APK nor LD_LIBRARY_PATH -- a plugin's lib directory is never added to it,
-because the launcher builds that list from its *V1* plugin registry only -- so
-the load failed on the first C++ symbol.
+Neither identifier exists in desktop GLSL, so the translation produced text that
+was never in the source. There was no way to see what, because both the shader
+as given and as converted were logged through LOG_D, and LOG_D is compiled out in
+a release build -- GLOBAL_DEBUG is 0, so the branch is dead. No log file, no
+printf, no android_log. latest.log contained none of it.
 
-Now static, which is what the upstream build has always used. Confirmed against
-the three arm64 builds in ref/towo-builds/, which run on this device and link
-only libandroid, liblog, libm, libdl and libc. Cobalt's NEEDED list now matches
-them exactly.
+v0.2.1 writes both forms to latest.log when CB_LOG_SHADER=1, exposed in the
+launcher as an editable renderer setting labelled "Log shader source
+(diagnostics)". Off by default.
 
-CI fails on any undefined C++ symbol. A symbol-presence check cannot catch this
-class of defect: a library can export all 4937 names correctly and still be
-unloadable.
+Deliberately not the existing per-call debug logging: that fires on every
+glClear and every glBindTexture, which is hundreds of megabytes and enough
+startup delay to look like a hang. Only the two shader dumps are gated.
 
-SDL_EGL_LIBRARY was a doubled path
-
-  SDL_EGL_LIBRARY = /data/app/.../lib/arm64//data/app/.../libcobalt.so
-
-The launcher consumes rendererEGLPath twice and its two consumers disagree about
-the form: POJAVEXEC_EGL takes it verbatim, while SDL_EGL_LIBRARY has
-nativeLibPath prepended unconditionally. An absolute value therefore doubles, SDL
-falls back to the system EGL, and Minecraft 26.3 then fails its own glGetError
-address comparison.
-
-rendererEGLPath is now a bare filename, and the absolute path the EGL bridge
-needs comes from LIBGL_GLES, which egl_loader.c prefers over POJAVEXEC_EGL.
-tools/check-env.py reproduces the launcher's environment construction and fails
-the build on a doubled path.
-
-Size: 38 MB -> 6.3 MB
-
-Unstripped debug info. Now --strip-unneeded, which preserves the dynamic symbol
-table that dlsym resolves through. 6.1 MB per ABI against TOWO's 5.9 MB, for the
-same renderer.
-
-Unchanged: all 256 GL names Minecraft resolves are still exported on all three
-ABIs.
-
-Note on that figure: the three TOWO builds run Minecraft on this device while
-lacking nine of them -- glGetProgrami, glGetShaderi, glGetInteger, glGetFloat,
-glGetInteger64, glGetTexLevelParameteri, glGetQueryObjecti,
-glGetQueryObjectui64 and glClipControl. None is a real GL or GLES function; they
-are LWJGL constant-pool strings the symbol extraction matched. So 256 means "no
-known gaps", not "256 required". They are exported anyway, since an unnecessary
-symbol costs bytes and a missing one costs a startup crash.
+If you turn it on and Minecraft fails the same way again, latest.log in the
+plugin's nativeLibraryDir/cobalt will contain the exact GLSL that went in and the
+exact ESSL that came out, which is what the next fix has to be written against.
