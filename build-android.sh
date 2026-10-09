@@ -168,6 +168,30 @@ if [ ! -f "$SO" ]; then
 fi
 install -m 755 "$SO" "$ROOT/$OUT/$COBALT_ABI/libcobalt.so"
 
+# The renderer's own settings, read at startup from CB_DIR_PATH/config.json.
+#
+# Not shipping this is what produced:
+#
+#     Failed to load config. Use default config.
+#     [Cobalt] Setting: maxGlslCacheSize            = 0
+#
+# config_refresh() fails on a missing file, and config_get_int() answers -1 for a key
+# it cannot read -- which init_settings() reads as "the config did not say". So the
+# whole config layer degrades to defaults without ever reporting a bad value. The
+# visible cost was maxGlslCacheSize = 0, which turns off the shader cache and with it
+# the negative cache from patches/0001, so a shader that fails to compile is retried on
+# every resource reload.
+#
+# CB_DIR_PATH is "**|cobalt", so this lands in the plugin's nativeLibraryDir/cobalt
+# next to libcobalt.so. Staged per ABI because jniLibs/<abi> is what Android unpacks.
+#
+# The settings are the defaults the renderer already falls back to, except where a
+# comment in the file says otherwise -- so shipping it stops the warning and switches
+# the shader cache on without otherwise changing behaviour.
+echo "==> Staging the renderer config"
+install -D -m 644 "$ROOT/plugin/config/cobalt-settings.json" \
+    "$ROOT/$OUT/$COBALT_ABI/cobalt/config.json"
+
 # Strip. The build carries -g (upstream puts it in CMAKE_CXX_FLAGS), which leaves
 # roughly 48 MB of DWARF per ABI: 54 MB here against 5.9 MB for the stripped
 # TOWO builds of the same renderer that run on this device.

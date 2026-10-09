@@ -8,6 +8,24 @@ plugins {
     id("com.android.application") version "8.5.2"
 }
 
+// The version is read from the repository's VERSION file rather than written here,
+// because a version stated in two places is a version that is wrong in one of them.
+// It was hardcoded at 0.1.0 and stayed there for six releases: the APK's own
+// "App info" screen said 0.1.0 for v0.3.2, and nothing in CI could see it, because
+// the build genuinely produced the artifact it was asked for.
+//
+// Reading the file is also what keeps the plugin's version from drifting away from
+// the git tag, which is the name the release is published under. tools/check-env.py
+// asserts the two agree.
+val cobaltVersion: String = rootProject.file("VERSION")
+    .readText()
+    .trim()
+    .removePrefix("v")
+
+require(Regex("""^\d+\.\d+\.\d+([-+.][0-9A-Za-z.+-]+)?$""").matches(cobaltVersion)) {
+    "VERSION contains '$cobaltVersion', which is not a version"
+}
+
 android {
     namespace = "me.shadow.cobalt"
     compileSdk = 34
@@ -16,8 +34,16 @@ android {
         applicationId = "me.shadow.cobalt"
         minSdk = 21
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        // Monotonic with the version, so the two cannot disagree about ordering.
+        // Build-time versionCode -- the default -- would leave it at 1 forever, and
+        // Android then refuses to install over an existing build as a downgrade.
+        // Since each CI run signs with a fresh key an install always needs an
+        // uninstall first anyway, but that is a property of the key, not a licence
+        // for the version to stop moving.
+        versionCode = cobaltVersion.split("-").first().split("+").first()
+            .split(".").map { it.toInt() }
+            .let { (major, minor, patch) -> major * 10000 + minor * 100 + patch }
+        versionName = cobaltVersion
 
         // The renderer .so is staged into jniLibs by build-android.sh, not by
         // Gradle, so a missing renderer still produces an APK -- and the

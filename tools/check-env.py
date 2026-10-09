@@ -27,6 +27,7 @@ means at least one value points somewhere that cannot work.
 
 import json
 import os
+import re
 import sys
 
 # Stand-in for the plugin's real nativeLibraryDir. Only its shape matters:
@@ -173,6 +174,42 @@ def check(env):
     return problems
 
 
+def check_version_agreement(repo_root):
+    """VERSION, the git tag and the APK's manifest must name the same release.
+
+    The plugin's version was hardcoded at 0.1.0 and stayed there for six releases,
+    so v0.3.2's own "App info" screen said 0.1.0. Nothing caught it: the build
+    produced exactly the APK it was told to, and every check in the workflow passed.
+
+    Android surfaces this to the user rather than to us, which is why it needed
+    asking about. A user comparing two installs has no way to tell them apart.
+    """
+    problems = []
+
+    version_file = os.path.join(repo_root, "VERSION")
+    if not os.path.exists(version_file):
+        return ["VERSION is missing; the plugin version comes from it"]
+    with open(version_file, "r", encoding="utf-8") as fh:
+        version = fh.read().strip().removeprefix("v")
+
+    if not re.match(r"^\d+\.\d+\.\d+", version):
+        problems.append("VERSION contains %r, which is not a version" % version)
+
+    # The release is published under a git tag, so a mismatch means the file and
+    # the download the user is holding disagree. Only meaningful on a tag build;
+    # a branch build has no tag to compare against.
+    ref = os.environ.get("GITHUB_REF", "")
+    if ref.startswith("refs/tags/"):
+        tag = ref[len("refs/tags/"):]
+        if tag.removeprefix("v") != version:
+            problems.append(
+                "VERSION is %r but this build is tagged %r, so the plugin would "
+                "report a version that does not match the release it came from"
+                % (version, tag)
+            )
+    return problems
+
+
 def main():
     path = sys.argv[1] if len(sys.argv) > 1 else "plugin/config/cobalt-renderer.json"
     with open(path, "r", encoding="utf-8") as fh:
@@ -187,6 +224,7 @@ def main():
         print("  %-20s = %s" % (key, env[key]))
 
     problems = check(env)
+    problems += check_version_agreement(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     print()
     if problems:
         print("%d problem(s):" % len(problems))

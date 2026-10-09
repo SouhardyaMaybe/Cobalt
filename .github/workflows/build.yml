@@ -247,6 +247,13 @@ jobs:
       - name: Test the GLSL translation passes
         run: ./tools/test-glsl.sh
 
+      # Parses plugin/config/cobalt-settings.json with the same cJSON the renderer
+      # uses. A missing key is not an error there -- config_get_int() answers -1 and
+      # init_settings() reads -1 as "absent" -- so the file has to be checked by
+      # something that reports instead of defaulting.
+      - name: Test the renderer settings
+        run: ./tools/test-config.sh
+
       # Every #include in src/*.cpp and patches/ must resolve to a file we
       # ship. The failure mode otherwise is a bare "fatal error: 'x.h' file not
       # found" naming a header nobody in this repository has heard of.
@@ -309,6 +316,49 @@ jobs:
               if probe not in arsc:
                   sys.exit("resources.arsc is missing %r; the launcher would not find the config" % probe)
           print("renderer config resource: present")
+
+          # The renderer's own config.json, read at startup from
+          # nativeLibraryDir/cobalt. Missing it is not an install error: the renderer
+          # falls back to defaults and logs "Failed to load config", which cost
+          # maxGlslCacheSize = 0 and with it the negative shader cache. Nothing else
+          # noticed, because every other artefact is still correct.
+          shipped = open("plugin/config/cobalt-settings.json", "rb").read()
+          for abi in ("arm64-v8a", "armeabi-v7a", "x86_64"):
+              entry = "lib/%s/cobalt/config.json" % abi
+              if entry not in names:
+                  sys.exit("%s is missing; the renderer will fall back to defaults" % entry)
+              if z.read(entry) != shipped:
+                  sys.exit("%s differs from plugin/config/cobalt-settings.json" % entry)
+          print("renderer settings: staged for all three ABIs")
+          PY
+
+      # The version the APK reports is a build input that stayed hardcoded at 0.1.0
+      # for six releases, so v0.3.2's own App info screen said 0.1.0 and no check
+      # noticed: the build faithfully produced the artifact it was asked for. Read
+      # back out of the built APK rather than out of VERSION, because the thing that
+      # was wrong is the artifact.
+          python3 - "$(apk)" VERSION <<'PY'
+          import re, sys, zipfile
+          # The binary manifest stores versionCode and versionName as a string pool;
+          # aapt is the reliable reader and is on the runner.
+          apk, version_file = sys.argv[1], sys.argv[2]
+          expected = open(version_file).read().strip().removeprefix("v")
+          out = subprocess.run(
+              ["$ANDROID_HOME/build-tools/34.0.0/aapt", "dump", "badging", apk],
+              capture_output=True, text=True, check=True).stdout
+          name = re.search(r"^versionName='([^']*)'", out, re.M)
+          code = re.search(r"^versionCode='([^']*)'", out, re.M)
+          if not name or not code:
+              sys.exit("aapt reported no version; the check cannot run")
+          print("APK reports: %s (%s)" % (name.group(1), code.group(1)))
+          if name.group(1) != expected:
+              sys.exit("APK says versionName=%s but VERSION says %s"
+                       % (name.group(1), expected))
+          major, minor, patch = expected.split("-")[0].split("+")[0].split(".")
+          want_code = int(major) * 10000 + int(minor) * 100 + int(patch)
+          if int(code.group(1)) != want_code:
+              sys.exit("APK says versionCode=%s but %s maps to %d"
+                       % (code.group(1), expected, want_code))
           PY
 
       - uses: actions/upload-artifact@v4

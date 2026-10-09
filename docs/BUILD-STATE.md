@@ -126,6 +126,36 @@ source before any `-I` path, so a stale extract in the same directory silently
 shadows the one you meant to compile. Run it via `tools/test-glsl.sh`, which
 extracts to a fresh temp dir.
 
+## What a working run still says
+
+26.3 runs. The log has no shader errors, no `SHADER DUMP`, no failed pipeline, and
+the world renders and a multiplayer server connects. The remaining lines are not all
+equal, and treating them as one class is how the last four debugging rounds went
+wrong.
+
+**Fixed by shipping the file.** `Failed to load config. Use default config.` came
+with `maxGlslCacheSize = 0`. No `config.json` was shipped, `config_refresh()` failed,
+and every key took its `-1` fallback — which `init_settings()` reads as "the config
+did not say", so the entire config layer degrades silently. The cost was a disabled
+shader cache, which also disables the negative cache from `patches/0001`: a shader
+that fails to compile is retried on every resource reload, and Minecraft reloads
+resources on every dimension change. `plugin/config/cobalt-settings.json` now ships
+as `nativeLibraryDir/cobalt/config.json`, per ABI. `tools/test-config.sh` parses it
+with the same cJSON the renderer uses, because `config_get_int()` returning `-1` for
+an unreadable key is indistinguishable from the key being absent — only something
+that reports instead of defaulting can tell.
+
+**Not ours.** `Couldn't leave fullscreen`, `Failed to set window icon`, the udev and
+`/proc` warnings, the "unexpected shutdown ... resetting fullscreen mode" note from
+the previous crashed run, and `Failed to find a usable hardware address` are Zalith,
+SDL and the Android sandbox. `Can't ping mcpvp.net` is DNS.
+
+**Correct, and worth leaving.** `Not Detected GL_EXT_multi_draw_indirect!` is a true
+statement about the Adreno 613, and `init_settings_post()` filters the multi-draw
+order down to what the device actually resolves — `multidrawOrderArrays = unroll` in
+the log is that filter working, with `unroll` always available. Removing the message
+would hide the reason the order is what it is.
+
 ## The three silent failures
 
 Each produced a green build. Each is now guarded, but the pattern is what

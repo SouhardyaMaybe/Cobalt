@@ -1,0 +1,34 @@
+{
+  "//": "Renderer's own settings, read at startup from CB_DIR_PATH/config.json.",
+  "//why": "Shipping this file is what stops 'Failed to load config. Use default config.' Every value below is the default the renderer already falls back to, so behaviour is unchanged -- what changes is that the file is found, config_refresh() succeeds, and keys whose -1 fallback differs from the default actually take effect.",
+
+  "enableANGLE": 0,
+  "//enableANGLE": "0 = off if unsupported, 1 = on if unsupported. Cobalt ships no ANGLE, so 0 either way; stated so the key is present and deliberate rather than absent and inherited.",
+
+  "enableNoError": 0,
+  "//enableNoError": "0 = off, 1 = swallow errors partially, 2 = swallow all. 0. Partial-swallowing hides real driver errors behind a black screen, which is how the 26.3 shader failure stayed hard to read.",
+
+  "enableExtComputeShader": 0,
+  "//enableExtComputeShader": "Expose compute shaders. Off: a GL 4.x application may issue compute work the device cannot do, and the failure surfaces far from its cause.",
+
+  "enableExtTimerQuery": 1,
+  "//enableExtTimerQuery": "Expose timer queries so Minecraft's frame-time graph works. Adreno 613 reports GL_EXT_disjoint_timer_query.",
+
+  "enableExtDirectStateAccess": 1,
+  "//enableExtDirectStateAccess": "Expose DSA. 26.3 and every modern version call glBindVertexBuffer/glCreateVertexArrays directly; without it those dlsym to null.",
+
+  "maxGlslCacheSize": 30,
+  "//maxGlslCacheSize": "Megabytes of translated-shader cache. 30 matches upstream's own default. 0 disables the cache entirely, which also disables the negative cache in patches/0001 -- a shader that fails to compile is recompiled on every resource reload. MC reloads resources on every dimension change.",
+
+  "angleDepthClearFixMode": 0,
+  "customGLVersion": 40,
+  "//customGLVersion": "40 = GL 4.0 core, exposed as ES 3.2 to the application. This is what the device log shows the game receiving: '4.0.0 Cobalt 2.0.0'. Raising it makes MC request features the driver does not have.",
+
+  "fsr1Setting": 0,
+  "//fsr1Setting": "0 = FSR 1 off. It is a post-process that needs its own shader program and render targets, and Cobalt does not wire it up.",
+
+  "hideMGEnvLevel": 0,
+  "//hideMGEnvLevel": "0 = renderer logging visible. Non-zero silences the log lines that make a driver problem diagnosable, which is the opposite of what was wanted.",
+
+  "multidrawOrder": "native, multiindirect, multibasevertex, multiarrays, indirect, basevertex, unroll, compute"
+}

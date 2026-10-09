@@ -11,6 +11,13 @@
 # on every push and still be the thing that catches a translation bug before a build
 # does. Only the string passes are covered -- anything needing glslang or SPIRV-Cross
 # to produce its input is out of reach here.
+#
+# Requires patches/ to have been applied. The extraction fails loudly rather than
+# producing a partial function, because a test that silently reads unpatched upstream
+# would report the bug as fixed. In CI it therefore runs after build-android.sh, and
+# locally either run that first or apply by hand:
+#
+#     git -C ref/mobileglues apply -p1 "$PWD"/patches/*.patch
 
 set -euo pipefail
 
