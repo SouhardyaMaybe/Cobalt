@@ -350,9 +350,19 @@ std::string GLSLtoGLSLES(const char* glsl_code, GLenum glsl_type, uint essl_vers
                          int& return_code) {
     std::string sha256_string(glsl_code);
     sha256_string += "\n//" + std::to_string(MAJOR) + "." + std::to_string(MINOR) + "." + std::to_string(REVISION) +
-                     "|" + std::to_string(essl_version);
+                     "|" + std::to_string(essl_version) +
+                     "|" + std::to_string(static_cast<unsigned>(glsl_type));
     const char* cachedESSL = Cache::get_instance().get(sha256_string.c_str());
     if (cachedESSL) {
+        // An empty entry is a recorded failure, not a stored translation. See
+        // the negative-caching note below: without it a shader the ES driver
+        // rejects pays the full glslang cost on every program reload, forever,
+        // for something that can never succeed.
+        if (cachedESSL[0] == '\0') {
+            LOG_D("GLSL Known-Failure Cache Hit; skipping translation.")
+            return_code = -1;
+            return glsl_code;
+        }
         LOG_D("GLSL Hit Cache:\n%s\n-->\n%s", glsl_code, cachedESSL)
         return_code = 0;
         return (char*)cachedESSL;
@@ -365,6 +375,13 @@ std::string GLSLtoGLSLES(const char* glsl_code, GLenum glsl_type, uint essl_vers
     if (return_code >= 0 && !converted.empty()) {
         converted = process_uniform_declarations(converted);
         Cache::get_instance().put(sha256_string.c_str(), converted.c_str());
+    } else {
+        // Record the failure so it is paid once rather than once per reload.
+        // An empty string is the sentinel: it occupies a cache entry, so a
+        // broken shader cannot evict working ones indefinitely, and it is
+        // indistinguishable from "no entry" only in size, never in meaning --
+        // get() returns nullptr for a miss and "" for this.
+        Cache::get_instance().put(sha256_string.c_str(), "");
     }
 
     return (return_code >= 0) ? converted : glsl_code;

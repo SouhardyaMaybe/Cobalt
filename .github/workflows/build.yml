@@ -1,0 +1,91 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # The NDK is required locally too. See build-android.sh.
+      - name: Set up the Android NDK
+        uses: nttld/setup-ndk@v1
+        id: ndk
+        with:
+          ndk-version: r27c
+
+      - name: Build the renderer
+        run: |
+          set -euo pipefail
+          chmod +x build-android.sh
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            echo "::group::$abi"
+            ANDROID_NDK_HOME="${{ steps.ndk.outputs.ndkPath }}" \
+            COBALT_ABI="$abi" \
+              ./build-android.sh
+            echo "::endgroup::"
+          done
+
+      # A renderer that silently loses entry points still builds. The counts are
+      # the guard, and this job fails rather than warns.
+      - name: Audit the exported ABI
+        run: |
+          set -euo pipefail
+          fail=0
+          for so in plugin/src/main/jniLibs/*/libcobalt.so; do
+            abi=$(basename "$(dirname "$so")")
+            gl=$(nm -D --defined-only "$so" | grep -cE ' T gl[A-Z]' || true)
+            egl=$(nm -D --defined-only "$so" | grep -cE ' T egl' || true)
+            echo "== $abi: gl*=$gl egl*=$egl =="
+            # MobileGlues exports far more than this; these are floors that catch
+            # a build that quietly stopped translating.
+            if [ "$gl" -lt 2000 ]; then
+              echo "::error::$abi exported only $gl gl* symbols"
+              fail=1
+            fi
+            if [ "$egl" -lt 20 ]; then
+              echo "::error::$abi exported only $egl egl* symbols"
+              fail=1
+            fi
+            # The ARB aliases are not optional: Minecraft 1.13 reaches for
+            # glActiveTextureARB and friends, gated on GLCapabilities.
+            if ! nm -D --defined-only "$so" | grep -q ' T glActiveTextureARB'; then
+              echo "::error::$abi is missing glActiveTextureARB"
+              fail=1
+            fi
+            # 26.3 compares the address of glGetError across lookup paths, so it
+            # has to exist exactly once.
+            n=$(nm -D --defined-only "$so" | grep -c ' T glGetError$' || true)
+            if [ "$n" -ne 1 ]; then
+              echo "::error::$abi exports glGetError $n times; 26.3 requires one address"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Build the plugin APK
+        working-directory: plugin
+        run: ./gradlew :app:assembleRelease --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cobalt-apk
+          path: plugin/app/build/outputs/apk/release/*.apk
+
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes
