@@ -113,7 +113,10 @@ cmake -B "$BUILD" -S "$SRC" \
     -DPROFILING=OFF
 
 echo "==> Building"
-cmake --build "$BUILD" --config Release -j "$(nproc)"
+# --verbose so the link command is in the log. Two rounds of chasing a symbol
+# problem through guesswork were resolved the moment the real command was
+# visible; the linker flags are the whole question and they were hidden.
+cmake --build "$BUILD" --config Release -j "$(nproc)" --verbose
 
 echo "==> Staging to $OUT/$COBALT_ABI"
 mkdir -p "$ROOT/$OUT/$COBALT_ABI"
