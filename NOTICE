@@ -1,0 +1,32 @@
+Cobalt Wrapper
+==============
+
+This project is licensed under the GNU Lesser General Public License, version
+2.1. See LICENSE.
+
+The renderer itself is a derivative work of MobileGlues
+(https://github.com/MobileGL-Dev/MobileGlues), which is licensed under the
+same terms. That work is included as a pinned submodule at ref/mobileglues and is
+carried unmodified in ref/mobileglues, except for the diffs applied at build
+time and documented in patches/ and src/.
+
+Per LGPL-2.1 section 5(a), the copyright notices and licence of the upstream
+work are preserved in every source file. tools/rebrand.py deliberately skips any
+line containing a copyright or SPDX notice for this reason.
+
+Third-party components, each under its own licence. Verified against the licence
+file shipped with each, not recalled:
+
+  SPIRV-Cross   Apache-2.0          3rdparty/SPIRV-Cross/LICENSE
+  Perfetto      Apache-2.0          3rdparty/perfetto/LICENSE
+  xxhash        MIT                 3rdparty/xxhash/LICENSE
+  cJSON         MIT                 config/cJSON.c
+  glslang       see its own terms   3rdparty/glslang/LICENSE.txt -- glslang
+                proper requires "a number of licenses", and the file itself
+                distinguishes the preprocessing path from the rest.
+  ska           Boost-1.0           include/ska/LICENSE
+
+glslang and ska are listed with their conditions rather than a single SPDX
+identifier because their licence files do not reduce to one. Naming a licence
+for them that is not the one in the file would be the same error as renaming a
+copyright notice away.
