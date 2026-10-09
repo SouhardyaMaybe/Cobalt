@@ -260,6 +260,13 @@ jobs:
       - name: Test the settings install
         run: ./tools/test-settings-install.sh
 
+      # The AXML parser that reads the APK's version, against manifests built to the
+      # layout in ResourceTypes.h. An earlier version of this parser read attributes
+      # from the wrong offsets and reported no version while exiting successfully --
+      # which would have made the check pass without checking anything.
+      - name: Test the APK version reader
+        run: python3 tools/test-apk-version.py
+
       # Every #include in src/*.cpp and patches/ must resolve to a file we
       # ship. The failure mode otherwise is a bare "fatal error: 'x.h' file not
       # found" naming a header nobody in this repository has heard of.
@@ -350,30 +357,17 @@ jobs:
           # built APK rather than out of VERSION, because the thing that was wrong is
           # the artifact.
           #
-          # aapt rather than a hand-rolled binary-manifest parser: versionCode and
-          # versionName live in the manifest's string pool, and reading them directly
-          # means encoding that pool's UTF-16 offsets.
-          #
-          # Located rather than assumed. GitHub's ubuntu runner has the Android SDK
-          # but does not put aapt on PATH, and the build-tools version is whatever the
-          # image shipped. A bare `aapt` here would be a check that passes by not
-          # existing, so the path is resolved from the environment and a missing aapt
-          # is a hard error instead of a skip.
-          aapt=""
-          for c in "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/build-tools/*/aapt \
-                   "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/cmdline-tools/*/bin/aapt; do
-            if [ -x "$c" ]; then aapt="$c"; break; fi
-          done
-          if [ -z "$aapt" ]; then
-            echo "::error::no aapt found under ${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools"
-            echo "::error::the version check cannot run, and an unverified version is the bug it exists to catch"
-            exit 1
-          fi
-          echo "using $aapt"
-          want=$(cat VERSION | tr -d '[:space:]' | sed 's/^v//')
-          got=$("$aapt" dump badging "$apk" \
-                | sed -n "s/^package: name='[^']*' versionCode='\([^']*\)' versionName='\([^']*\)'.*/\1 \2/p")
-          [ -n "$got" ] || { echo "::error::aapt reported no version; the check cannot run"; exit 1; }
+          # tools/apk-version.py rather than `aapt dump badging`. aapt needs the
+          # framework resource table to resolve the manifest's
+          # @android:drawable/ic_menu_rotate, and without -I<platform>/android.jar it
+          # fails with "attribute value reference does not exist" -- which reads like a
+          # broken manifest rather than a missing flag, and which is how this check spent
+          # one run red on an APK that was entirely correct. The parser is tested
+          # against manifests built to the layout in ResourceTypes.h.
+          want=$(tr -d '[:space:]' < VERSION | sed 's/^v//')
+          got=$(python3 tools/apk-version.py "$apk") || {
+            echo "::error::could not read the version out of the APK"
+            exit 1; }
           echo "APK reports: versionCode=$(echo "$got" | cut -d' ' -f1) versionName=$(echo "$got" | cut -d' ' -f2)"
           [ "$(echo "$got" | cut -d' ' -f2)" = "$want" ] || {
             echo "::error::APK reports versionName=$(echo "$got" | cut -d' ' -f2), VERSION says $want"
