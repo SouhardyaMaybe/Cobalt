@@ -59,6 +59,26 @@ done
 # The rebrand runs after the patches, not before. Patches are written against
 # pristine upstream, so anything that rewrites the sources first would make them
 # fail to apply. tools/rebrand.py is idempotent, so this ordering costs nothing.
+# New source files ship as whole .cpp files rather than patches. A patch adding
+# a file is a diff with no pre-image, which git apply handles awkwardly and a
+# reviewer cannot read; a file is just the file. They are copied in here, before
+# the rebrand, so tools/rebrand.py sees them like any other source.
+echo "==> Adding Cobalt sources"
+shopt -s nullglob
+for f in "$ROOT"/src/*.cpp; do
+    b=$(basename "$f")
+    cp "$f" "$SRC/gl/$b"
+    # CMake compiles only what CMakeLists.txt lists. A source file that is not
+    # listed compiles cleanly, exports nothing, and every symbol check still
+    # passes -- so the list entry is added here, not left to be remembered.
+    if ! grep -q "gl/$b" "$SRC/CMakeLists.txt"; then
+        sed -i "0,/^    gl\/cobalt.cpp$/s//    gl\/cobalt.cpp\n    gl\/$b/" "$SRC/CMakeLists.txt"
+    fi
+    grep -q "gl/$b" "$SRC/CMakeLists.txt" || {
+        echo "error: gl/$b is not in CMakeLists.txt after insertion" >&2; exit 1; }
+    echo "    gl/$b"
+done
+
 echo "==> Rebranding to Cobalt"
 python3 tools/rebrand.py "$SRC"
 

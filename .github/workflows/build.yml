@@ -57,6 +57,10 @@ jobs:
       - name: Audit the exported ABI
         run: |
           set -euo pipefail
+          # Sorted, one name per line: comm(1) needs both inputs sorted to
+          # report set difference rather than "no lines in common".
+          python3 -c "import json;print('\\n'.join(sorted(json.load(open('research-mcgl/union_symbols.json')))))" \
+            > mcgl_union.txt
           fail=0
           found=0
           for abi in arm64-v8a armeabi-v7a x86_64; do
@@ -101,6 +105,23 @@ jobs:
             if nm -D --defined-only "$so" | grep -qi 'mobileglues'; then
               echo "::error::$abi still exports a MobileGlues symbol"
               fail=1
+            fi
+            # The full set of names Minecraft resolves, as a hard gate. Not a
+            # count: a count cannot tell a rename from a removal, which is
+            # exactly the mistake that produced the 28 missing ARB/EXT entries
+            # in the first place.
+            #
+            # src/arb_ext.cpp exists to close this gap, so a regression here
+            # means that file stopped being compiled -- CMake builds only what
+            # CMakeLists.txt lists, and a source file missing from the list
+            # compiles cleanly and exports nothing.
+            missing=$(comm -23 mcgl_union.txt "$RUNNER_TEMP/syms-$abi.txt" | grep -c '^gl[A-Z]' || true)
+            if [ "$missing" -ne 0 ]; then
+              echo "::error::$abi is missing $missing name(s) Minecraft resolves:"
+              comm -23 mcgl_union.txt "$RUNNER_TEMP/syms-$abi.txt" | grep '^gl[A-Z]' | sed 's/^/    /'
+              fail=1
+            else
+              echo "  all $(grep -c . mcgl_union.txt) Minecraft-resolved names exported"
             fi
           done
           if [ "$found" -ne 3 ]; then
