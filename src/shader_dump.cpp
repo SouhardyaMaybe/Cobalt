@@ -37,11 +37,6 @@ extern "C" {
 void write_log(const char *format, ...);
 }
 
-// logcat truncates a single entry at 4 KB, silently. Emitting one entry per line
-// would therefore lose the tail of every shader with no indication, so each
-// section goes out as one capped entry and says what it dropped.
-#define COBALT_DUMP_CHARS 3000
-
 // Default on for this path: it fires once per *failing* compile, which during
 // startup is about a dozen times, not per frame. CB_LOG_SHADER=0 disables it.
 static bool dump_enabled() {
@@ -82,6 +77,61 @@ static const char *recall_source(GLuint shader) {
     unsigned slot = (unsigned)(shader % COBALT_SRC_SLOTS);
     if (g_src_id[slot] == shader) return g_src_original[slot].c_str();
     return nullptr;
+}
+
+// The three channels, and why all three.
+//
+// LOG_V does __android_log_print, printf and write_log. Only printf is visible
+// in the launcher's log, and that is the channel this dump needs.
+//
+// Established from a device log: during "DLOPEN Renderer" the renderer's stdout
+// appears in the launcher's output verbatim --
+//
+//   [Cobalt] Setting: enableAngle                 = false
+//   [Cobalt] multidrawOrderElements               = indirect > unroll
+//   EGL initialized successfully
+//
+// The first two are LOG_V, so LOG_V's printf reaches the user. A dump that used
+// only __android_log_print and write_log produced nothing in four runs for
+// exactly this reason: logcat is not in the launcher's log view, and the file
+// needs an adb pull. The dump was working; it was writing to two places nobody
+// was looking at.
+//
+// printf is emitted in chunks because the launcher's log view truncates very
+// long lines -- a shader is thousands of characters and would arrive as one
+// silently shortened line. 900 characters is comfortably under that and still
+// needs few enough chunks to stay readable.
+static void emit(const char *tag, const char *text) {
+    if (text == nullptr) return;
+    printf("[Cobalt] %s: %s\n", tag, text);
+    __android_log_print(ANDROID_LOG_ERROR, RENDERERNAME, "%s: %s", tag, text);
+    write_log("%s: %s", tag, text);
+}
+
+// Emits a labelled source in chunks, stating what was dropped.
+static void emit_source(const char *label, const char *src) {
+    if (src == nullptr || *src == '\0') {
+        emit(label, "(absent)");
+        return;
+    }
+    size_t total = strlen(src);
+    size_t off = 0;
+    unsigned part = 1;
+    while (off < total) {
+        size_t n = total - off < 900 ? total - off : 900;
+        char chunk[901];
+        memcpy(chunk, src + off, n);
+        chunk[n] = '\0';
+        char label_buf[128];
+        snprintf(label_buf, sizeof(label_buf), "%s part %u/%s", label, part,
+                 (off + n >= total) ? "last" : "...");
+        emit(label_buf, chunk);
+        off += n;
+        part++;
+    }
+    char note[192];
+    snprintf(note, sizeof(note), "%s: %d chars, emitted in %u part(s)", label, (int)total, part - 1);
+    emit("SHADER DUMP SUMMARY", note);
 }
 
 extern "C" {
@@ -128,29 +178,16 @@ GLAPI GLAPIENTRY void glCompileShader(GLuint shader) {
     const char *converted = (shaderInfo.id == shader) ? shaderInfo.converted.c_str() : nullptr;
     const char *original = recall_source(shader);
 
-    __android_log_print(ANDROID_LOG_ERROR, "Cobalt",
-                        "=== SHADER COMPILE FAILED id=%u === translated=%s", (unsigned)shader,
-                        converted ? "yes" : "NO (translation returned nothing)");
-    __android_log_print(ANDROID_LOG_ERROR, "Cobalt", "--- driver info log ---\n%s",
-                        driver_log[0] ? driver_log : "(empty)");
+    char header[256];
+    snprintf(header, sizeof(header), "=== SHADER COMPILE FAILED id=%u translated=%s ===",
+             (unsigned)shader, converted ? "yes" : "NO, translation returned nothing");
+    emit("SHADER DUMP", header);
 
-    __android_log_print(ANDROID_LOG_ERROR, "Cobalt", "--- ORIGINAL from Minecraft: %d chars, first %d ---%s",
-                        original ? (int)strlen(original) : 0, original ? COBALT_DUMP_CHARS : 0,
-                        (original && strlen(original) > COBALT_DUMP_CHARS) ? " [TRUNCATED]" : "");
-    __android_log_print(ANDROID_LOG_ERROR, "Cobalt", "%s", original ? original : "(not retained)");
+    emit("DRIVER INFO LOG", driver_log[0] ? driver_log : "(empty)");
+    emit_source("SOURCE AS MINECRAFT SUPPLIED IT", original);
+    emit_source("SOURCE AFTER COBALT TRANSLATION", converted);
 
-    __android_log_print(ANDROID_LOG_ERROR, "Cobalt",
-                        "--- TRANSLATED by Cobalt: %d chars, first %d ---%s",
-                        converted ? (int)strlen(converted) : 0, converted ? COBALT_DUMP_CHARS : 0,
-                        (converted && strlen(converted) > COBALT_DUMP_CHARS) ? " [TRUNCATED]" : "");
-    __android_log_print(ANDROID_LOG_ERROR, "Cobalt", "%s", converted ? converted : "(none)");
-    __android_log_print(ANDROID_LOG_ERROR, "Cobalt", "=== END SHADER DUMP ===");
-
-    write_log("=== SHADER COMPILE FAILED id=%u translated=%s", (unsigned)shader, converted ? "yes" : "NO");
-    write_log("--- driver info log ---\n%s", driver_log[0] ? driver_log : "(empty)");
-    write_log("--- ORIGINAL ---\n%s", original ? original : "(not retained)");
-    write_log("--- TRANSLATED ---\n%s", converted ? converted : "(none)");
-    write_log("=== END SHADER DUMP ===");
+    emit("SHADER DUMP", "=== END ===");
 }
 
 // Called from glShaderSource so the original is captured before translation
