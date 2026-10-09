@@ -214,27 +214,13 @@ jobs:
           name: cobalt-apk
           path: plugin/build/outputs/apk/release/*.apk
 
-      - name: Publish
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Delete-then-create rather than create. Re-running a tag's build is
-          # ordinary -- moving a tag to a fix commit, or rebuilding after a
-          # transient failure -- and "a release with the same tag name already
-          # exists" turned every one of those into a red build after the
-          # renderer, the audit and the APK verification had all passed.
-          #
-          # gh 2.46 has no --clobber, which is the obvious fix and was the next
-          # thing tried; it fails with "unknown flag: --clobber" and dumps the
-          # whole help text. Hence the explicit delete.
-          #
-          # || true because a tag that has never been released has no release to
-          # delete, which is the normal first-run case. Deliberately no
-          # --cleanup-tag: that deletes the git tag too, and the tag is what
-          # identifies this build.
-          gh release delete "$GITHUB_REF_NAME" --yes || true
-          gh release create "$GITHUB_REF_NAME" \
-            plugin/build/outputs/apk/release/*.apk \
-            --title "$GITHUB_REF_NAME" \
-            --notes-file RELEASE-NOTES.md
+      # No publish step here. GITHUB_TOKEN is scoped to the repository's own
+      # contents and cannot create a release:
+      #
+      #   HTTP 403: Resource not accessible by integration
+      #   .../repos/SouhardyaMaybe/Cobalt/releases
+      #
+      # which failed the last step of an otherwise green build and read like a
+      # permissions problem with the build rather than with the publishing. The
+      # artifacts are uploaded either way; releases are cut from a machine with
+      # a token that has repo scope, via tools/publish.sh.
