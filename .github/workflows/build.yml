@@ -130,6 +130,17 @@ jobs:
             # means that file stopped being compiled -- CMake builds only what
             # CMakeLists.txt lists, and a source file missing from the list
             # compiles cleanly and exports nothing.
+            # Direct probes, before the set comparison. comm output says which
+            # names are absent but not whether they are absent from the binary or
+            # absent from the comparison, and those two were impossible to tell
+            # apart from the log alone.
+            for probe in glActiveTextureARB glGenBuffersARB glGenFramebuffersEXT glGetProgrami; do
+                if grep -qx "$probe" "$RUNNER_TEMP/syms-$abi.txt"; then
+                    echo "    probe $probe: present"
+                else
+                    echo "    probe $probe: ABSENT"
+                fi
+            done
             missing=$(comm -23 mcgl_union.txt "$RUNNER_TEMP/syms-$abi.txt" | grep -c '^gl[A-Z]' || true)
             if [ "$missing" -ne 0 ]; then
               echo "::error::$abi is missing $missing name(s) Minecraft resolves:"
@@ -149,7 +160,11 @@ jobs:
         working-directory: plugin
         run: gradle assembleRelease --no-daemon --stacktrace
 
+      # if: always(). The symbol list is the evidence for whatever the audit
+      # says, and an audit that fails without publishing it cannot be diagnosed
+      # without re-running the build.
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: exported-symbols
           path: exported-*.txt
