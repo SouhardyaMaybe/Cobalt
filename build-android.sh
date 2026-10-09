@@ -67,7 +67,7 @@ python3 tools/rebrand.py "$SRC"
 # config fails the build with a reason rather than the launcher silently
 # skipping the plugin on a user's device.
 echo "==> Generating the launcher config resource"
-python3 tools/gen-config.py plugin/config/cobalt-renderer.json plugin/build/generated/res
+python3 tools/gen-config.py plugin/config/cobalt-renderer.json plugin/generated/res
 
 echo "==> Configuring ($API, minSdk $MIN_API)"
 cmake -B "$BUILD" -S "$SRC" \

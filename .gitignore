@@ -1,0 +1,14 @@
+# Gradle
+plugin/build/
+.gradle/
+
+# Generated from config/cobalt-renderer.json by tools/gen-config.py, which
+# build-android.sh runs before Gradle. Not tracked: it is a build product, and a
+# stale copy in the repo is exactly the drift the generator exists to prevent.
+plugin/generated/
+
+# The renderer, staged by build-android.sh. Tracked nowhere; 54 MB per ABI.
+plugin/src/main/jniLibs/
+
+# Symbol lists published by the CI audit step.
+exported-*.txt

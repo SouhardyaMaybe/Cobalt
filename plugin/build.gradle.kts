@@ -41,7 +41,11 @@ android {
 
     sourceSets {
         getByName("main") {
-            res.srcDir("build/generated/res")
+            // Deliberately outside build/. AGP owns build/generated/res as its
+            // own output, so a generator writing there collides with
+            // mergeResources and the build fails with an undeclared-task-
+            // dependency error rather than anything mentioning the generator.
+            res.srcDir("generated/res")
         }
     }
 }
