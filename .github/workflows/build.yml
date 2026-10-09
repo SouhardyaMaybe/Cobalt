@@ -195,6 +195,12 @@ jobs:
       # Before the APK, not after: an unsigned APK cannot be installed, and the
       # launcher finds renderer plugins by querying installed packages, so an
       # unsigned build is not testable at all.
+      # The launcher env the game will see, reconstructed from our config. The
+      # first device run showed a doubled SDL_EGL_LIBRARY that no other check
+      # would have seen, so this is asserted rather than left to a human read.
+      - name: Check the launcher environment
+        run: python3 tools/check-env.py
+
       - name: Generate the signing key
         run: ./tools/gen-key.sh
 

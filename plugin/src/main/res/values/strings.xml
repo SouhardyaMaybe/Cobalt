@@ -13,4 +13,17 @@
       the launcher lists renderers by this string.
     -->
     <string name="app_name">Cobalt Wrapper</string>
+
+    <!--
+      Label for the CB_LOG_SHADER setting, which the launcher shows as a
+      user-editable environment variable.
+
+      The renderer has no config file the user edits: this one value is the
+      switch that produces shader logs, and CustomizableEnv is the only V2 env
+      type that leaves the value unset by default while still exposing it. The
+      title has to come from here and be reachable through a meta-data entry,
+      because RendererEnv resolves a MetaString by looking up a resource id from
+      the plugin's own meta-data bundle rather than by name.
+    -->
+    <string name="log_shader_title">Log shader source (diagnostics)</string>
 </resources>

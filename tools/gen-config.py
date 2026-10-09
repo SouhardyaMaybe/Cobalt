@@ -145,6 +145,15 @@ def validate(cfg, path):
             )
         if "key" not in entry:
             problems.append("env[%d] has no key" % i)
+        if etype == "CustomizableEnv":
+            title = entry.get("title")
+            if not title:
+                problems.append(
+                    "env[%d] (%s) has no title; the launcher shows it unlabelled"
+                    % (i, entry.get("key"))
+                )
+            elif not title.get("key"):
+                problems.append("env[%d] (%s) has an empty title key" % (i, entry.get("key")))
 
     keys = [e.get("key") for e in (cfg.get("env") or []) if isinstance(e, dict)]
     if "SDL_OPENGL_LIBRARY" not in keys:

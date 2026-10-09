@@ -10,7 +10,10 @@
     { "type": "NormalEnv", "key": "SDL_VIDEO_DRIVER", "value": "android" },
     { "type": "NormalEnv", "key": "LIBGL_GLES", "value": "**|libcobalt.so" },
     { "type": "NormalEnv", "key": "CB_DIR_PATH", "value": "**|cobalt" },
-    { "type": "NormalEnv", "key": "CB_COUNT_LAUNCH", "value": "1" }
+    { "type": "NormalEnv", "key": "CB_COUNT_LAUNCH", "value": "1" },
+    { "type": "CustomizableEnv", "key": "CB_LOG_SHADER",
+      "title": { "key": "cobalt_title_log_shader" },
+      "defaultValue": null }
   ],
   "minMCVer": null,
   "maxMCVer": null

@@ -37,5 +37,15 @@
         <meta-data
             android:name="fclPlugin_V2"
             android:resource="@string/cobalt_renderer_config" />
+
+        <!--
+          Titles for user-editable env vars. RendererEnv.getMetaString() looks
+          the name up in this bundle and resolves it to a string, so a
+          MetaString whose key has no entry here resolves to null and the
+          setting appears unlabelled.
+        -->
+        <meta-data
+            android:name="cobalt_title_log_shader"
+            android:resource="@string/log_shader_title" />
     </application>
 </manifest>

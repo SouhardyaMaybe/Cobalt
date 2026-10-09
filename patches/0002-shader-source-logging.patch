@@ -1,0 +1,43 @@
+diff --git a/MobileGlues-cpp/gl/shader.cpp b/MobileGlues-cpp/gl/shader.cpp
+index cf4043d..7fc45c3 100644
+--- a/MobileGlues-cpp/gl/shader.cpp
++++ b/MobileGlues-cpp/gl/shader.cpp
+@@ -10,6 +10,7 @@
+ 
+ #include <GL/gl.h>
+ #include "log.h"
++#include "shader_log.h"
+ #include "program.h"
+ #include "../gles/loader.h"
+ #include "../includes.h"
+@@ -77,13 +78,16 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar* const* string, c
+     bool is_sampler_buffer_emulated = hardware->emulate_texture_buffer && check_if_sampler_buffer_used(glsl_src);
+ 
+     if (is_direct_shader(glsl_src.c_str())) {
+-        LOG_D("[INFO] [Shader] Direct shader source: ")
+-        LOG_D("%s", glsl_src.c_str())
++        // LOG_SHADERS, not LOG_D. LOG_D is compiled out in a release build --
++        // GLOBAL_DEBUG is 0 -- so these three dumps have never run, and the
++        // converted shader was not written anywhere at all.
++        LOG_SHADERS("\n[Cobalt] === Direct shader source ===\n")
++        LOG_SHADERS_N("%s\n", glsl_src.c_str())
+         essl_src = glsl_src;
+     } else {
+         int glsl_version = getGLSLVersion(glsl_src.c_str());
+-        LOG_D("[INFO] [Shader] Shader source: ")
+-        LOG_D("%s", glsl_src.c_str())
++        LOG_SHADERS("\n[Cobalt] === Shader source (in) ===\n")
++        LOG_SHADERS_N("%s\n", glsl_src.c_str())
+         GLint shaderType;
+         GLES.glGetShaderiv(shader, GL_SHADER_TYPE, &shaderType);
+         int return_code = 0;
+@@ -93,7 +97,8 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar* const* string, c
+             LOG_E("Failed to convert shader %d.", shader)
+             return;
+         }
+-        LOG_D("\n[INFO] [Shader] Converted Shader source: \n%s", essl_src.c_str())
++        LOG_SHADERS("\n[Cobalt] === Converted shader source (out) ===\n")
++        LOG_SHADERS_N("%s\n", essl_src.c_str())
+     }
+     if (!essl_src.empty()) {
+         shaderInfo.id = shader;
