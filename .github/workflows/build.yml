@@ -50,17 +50,29 @@ jobs:
 
       # A renderer that silently loses entry points still builds. The counts are
       # the guard, and this job fails rather than warns.
+      # Cross-ABI, and the last thing that can catch a renderer that quietly
+      # stopped translating. build-android.sh checks only the ABI it just built,
+      # because CI invokes it once per ABI; completeness is a whole-build
+      # property, so it is asserted here, once.
       - name: Audit the exported ABI
         run: |
           set -euo pipefail
           fail=0
-          for so in plugin/src/main/jniLibs/*/libcobalt.so; do
-            abi=$(basename "$(dirname "$so")")
+          found=0
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            so="plugin/src/main/jniLibs/$abi/libcobalt.so"
+            if [ ! -f "$so" ]; then
+              echo "::error::$abi was never built; the APK would ship without it"
+              fail=1
+              continue
+            fi
+            found=$((found + 1))
             gl=$(nm -D --defined-only "$so" | grep -cE ' T gl[A-Z]' || true)
             egl=$(nm -D --defined-only "$so" | grep -cE ' T egl' || true)
-            echo "== $abi: gl*=$gl egl*=$egl =="
-            # MobileGlues exports far more than this; these are floors that catch
-            # a build that quietly stopped translating.
+            echo "== $abi: gl*=$gl egl*=$egl $(du -h "$so" | cut -f1) =="
+            # The renderer exports far more than this. These are floors, not
+            # targets: they catch a build that stopped translating rather than
+            # one that lost a handful of entry points.
             if [ "$gl" -lt 2000 ]; then
               echo "::error::$abi exported only $gl gl* symbols"
               fail=1
@@ -69,20 +81,31 @@ jobs:
               echo "::error::$abi exported only $egl egl* symbols"
               fail=1
             fi
-            # The ARB aliases are not optional: Minecraft 1.13 reaches for
+            # The ARB aliases are not optional: 1.13 reaches for
             # glActiveTextureARB and friends, gated on GLCapabilities.
             if ! nm -D --defined-only "$so" | grep -q ' T glActiveTextureARB'; then
               echo "::error::$abi is missing glActiveTextureARB"
               fail=1
             fi
-            # 26.3 compares the address of glGetError across lookup paths, so it
-            # has to exist exactly once.
+            # 26.3 compares the address of glGetError across lookup paths
+            # (dlsym vs eglGetProcAddress vs SDL_GL_GetProcAddress), so it has
+            # to resolve to exactly one pointer.
             n=$(nm -D --defined-only "$so" | grep -c ' T glGetError$' || true)
             if [ "$n" -ne 1 ]; then
-              echo "::error::$abi exports glGetError $n times; 26.3 requires one address"
+              echo "::error::$abi exports glGetError $n times; 26.3 needs one address"
+              fail=1
+            fi
+            # A renamed renderer must not still answer to the old name in the
+            # strings a game reads.
+            if nm -D --defined-only "$so" | grep -qi 'mobileglues'; then
+              echo "::error::$abi still exports a MobileGlues symbol"
               fail=1
             fi
           done
+          if [ "$found" -ne 3 ]; then
+            echo "::error::only $found of 3 ABIs were built"
+            fail=1
+          fi
           exit $fail
 
       - name: Build the plugin APK

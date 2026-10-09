@@ -99,14 +99,18 @@ if [ ! -f "$SO" ]; then
 fi
 install -m 755 "$SO" "$ROOT/$OUT/$COBALT_ABI/libcobalt.so"
 
-echo "==> Symbols"
-for abi in arm64-v8a armeabi-v7a x86_64; do
-    so="$ROOT/$OUT/$abi/libcobalt.so"
-    [ -f "$so" ] || { echo "  $abi  MISSING"; exit 1; }
-    gl=$(nm -D --defined-only "$so" | grep -cE ' T gl[A-Z]' || true)
-    egl=$(nm -D --defined-only "$so" | grep -cE ' T egl' || true)
-    # MobileGlues must export the platform GL too, or MG's own internal calls
-    # resolve to the system driver and silently bypass all state tracking.
-    # -Bsymbolic-functions is what prevents that; see CMakeLists.txt.
-    echo "  $abi  gl*=$gl  egl*=$egl  $(du -h "$so" | cut -f1)"
-done
+# Reports the ABI that was just built, not all three. CI invokes this once per
+# ABI, so asserting the others are present here failed on the first invocation
+# with "armeabi-v7a MISSING" -- the ABI had not been attempted yet.
+#
+# Cross-ABI completeness is checked once, at the end, by the workflow's audit
+# step. Splitting it that way keeps each check next to the thing it verifies.
+echo "==> Symbols ($COBALT_ABI)"
+so="$ROOT/$OUT/$COBALT_ABI/libcobalt.so"
+gl=$(nm -D --defined-only "$so" | grep -cE ' T gl[A-Z]' || true)
+egl=$(nm -D --defined-only "$so" | grep -cE ' T egl' || true)
+# The renderer must export the platform GL symbols too, not just its own
+# wrappers. Without -Bsymbolic-functions its internal calls bind to the system
+# driver's libGLESv2 instead, so state tracking is bypassed everywhere and the
+# translation is silently a no-op.
+echo "  gl*=$gl  egl*=$egl  $(du -h "$so" | cut -f1)"
