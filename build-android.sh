@@ -104,24 +104,32 @@ echo "==> Generating the launcher config resource"
 python3 tools/gen-config.py plugin/config/cobalt-renderer.json plugin/generated/res
 
 echo "==> Configuring ($API, minSdk $MIN_API)"
+
+# c++_static, not c++_shared, and not by preference.
+#
+# A shared-libc++ build puts "NEEDED libc++_shared.so" in the .so and leaves 118
+# __ndk1 symbols undefined. That library is in neither the APK nor
+# LD_LIBRARY_PATH -- a plugin's lib directory is never added, because
+# getLibraryPath() consults only the V1 plugin list -- so dlopen fails on the
+# first C++ symbol it touches:
+#
+#   cannot locate symbol "_ZTVNSt6__ndk119basic_ostringstreamIcE..."
+#
+# which is what the first two device runs reported. Static libc++ embeds the
+# symbols, costs a couple of MB per ABI, and needs nothing from the host.
+#
+# Confirmed twice over: upstream's CMakeLists has only ever said c++_static, and
+# the three TOWO builds in ref/towo-builds/ -- which run on this device -- link
+# only libandroid, liblog, libm, libdl and libc.
+#
+# The comment sits above the command rather than between its backslash
+# continuations. A "#" line there ends the command: bash joins the continued
+# line, the rest becomes a comment, and the next -D argument is executed as a
+# command of its own.
 cmake -B "$BUILD" -S "$SRC" \
     -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" \
     -DANDROID_ABI="$COBALT_ABI" \
     -DANDROID_PLATFORM="android-$API" \
-    # c++_static, not c++_shared, and not by preference.
-    #
-    # A shared-libc++ build puts "NEEDED libc++_shared.so" in the .so and leaves
-    # every __ndk1 symbol undefined. That library is in neither the APK nor
-    # LD_LIBRARY_PATH -- a plugin's lib directory is not on it -- so dlopen
-    # fails on the first C++ symbol it touches:
-    #
-    #   cannot locate symbol "_ZTVNSt6__ndk119basic_ostringstreamIcE..."
-    #
-    # which is what the first device run reported. Static libc++ embeds the
-    # symbols; it costs a couple of MB per ABI and needs nothing from the host.
-    #
-    # Upstream's CMakeLists also says c++_static, so this matches it rather than
-    # overriding it.
     -DANDROID_STL="c++_static" \
     -DCMAKE_BUILD_TYPE=Release \
     -DPROFILING=OFF
