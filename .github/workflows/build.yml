@@ -233,6 +233,20 @@ jobs:
       - name: Check the launcher environment
         run: python3 tools/check-env.py
 
+      # Runs after the renderer build because build-android.sh applies patches/.
+      # Without this, a shader-translation bug is only visible as a driver syntax
+      # error in a logcat on a phone: the translation passes are pure std::string
+      # work, so they compile clean, they link, and every ABI audit passes.
+      #
+      # This is where Minecraft 26.3 was lost. process_uniform_declarations matched
+      # the bare substring "uniform", so it fired inside the `_uniform_instance_00_00`
+      # identifiers that 26.3's SPIRV-Cross output is built from, ate the enclosing
+      # condition and every statement up to the next `;`, and rewrote them as a
+      # uniform declaration -- so every core/terrain shader reached the driver as
+      # `if (_uniform _instance_00_00 ;`.
+      - name: Test the GLSL translation passes
+        run: ./tools/test-glsl.sh
+
       # Every #include in src/*.cpp and patches/ must resolve to a file we
       # ship. The failure mode otherwise is a bare "fatal error: 'x.h' file not
       # found" naming a header nobody in this repository has heard of.

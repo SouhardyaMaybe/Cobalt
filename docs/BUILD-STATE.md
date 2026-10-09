@@ -66,6 +66,66 @@ list, then that a Minecraft version starts.
 Logs land in the plugin's own `nativeLibraryDir/cobalt` (inside the app sandbox,
 no permission needed). `latest.log` is the one to read.
 
+## Minecraft 26.3: the shader translation failure
+
+26.3 was the one version that would not start. Everything up to the shader
+compile was correct — EGL context, `dlopen`, SDL window, and 26.3's own
+`glGetError` address gate — and every core/terrain fragment shader failed with:
+
+    ERROR: 0:224: '_uniform' : undeclared identifier
+    ERROR: 0:224: '_instance_00_00' : Syntax error
+
+`patches/0004` fixes it. The cause is in `process_uniform_declarations`, which
+matched the bare substring `uniform` rather than the keyword:
+
+    if (glslCode.compare(scan_pos, 7, "uniform") == 0) {
+
+26.3 is the only version that ships RenderPearl, which flattens uniforms into
+interface blocks and names them `_uniform_00_00` / `_uniform_instance_00_00`.
+Every shader is full of identifiers that *start* with `uniform`, so the pass
+fired inside them, consumed the enclosing condition and every statement up to
+the next `;`, and rewrote the lot as a uniform declaration:
+
+    if (_uniform_instance_00_00.UseRgss == 1)
+    {
+        highp vec2 param = _interface_variable_03;
+        highp vec2 param_1 = ...;
+
+became
+
+    if (_uniform _instance_00_00 ;
+
+— the dangling `_` being what the driver reported as an undeclared identifier.
+The rewritten text also references `_uniform_00_02`, which by then is never
+declared, so it could not have compiled even if the brace had survived.
+
+Two defects, both fixed:
+
+1. **No token boundary on the keyword.** `is_uniform_keyword()` now requires a
+   non-identifier character on both sides.
+2. **A block's end was found at its first `;`,** which is inside the body. The
+   pass therefore deleted the body of any block containing an initialiser and
+   left unbalanced braces. Unreachable for valid GLSL from older versions, which
+   is why 1.13 → 26.2 were unaffected; found by an invariant in the new test
+   rather than by a failing shader.
+
+### Reproducing this without a device
+
+The translation passes are plain `std::string` code; only the file around them
+needs glslang and SPIRV-Cross. `tools/test-glsl.sh` lifts the functions out of
+the shipped source and compiles them on the host, so the fix is testable in
+seconds rather than only on a phone. Two fixtures are taken from the on-device
+log of the failing shaders, and the suite asserts each comes back byte-identical.
+
+The test is deliberately not vacuous: linked against pristine upstream it fails
+9 assertions, naming the 26.3 corruption, `myuniform`, `uniforms`, and the brace
+imbalance.
+
+Note for anyone extending it: `#include "passes.inc"` resolves next to the test
+source before any `-I` path, so a stale extract in the same directory silently
+shadows the one you meant to compile. Run it via `tools/test-glsl.sh`, which
+extracts to a fresh temp dir.
+
 ## The three silent failures
 
 Each produced a green build. Each is now guarded, but the pattern is what
@@ -84,6 +144,16 @@ matters — in this project a build succeeding means nothing on its own.
 3. **A measurement that is wrong rather than the code.** `comm(1)` compares set
    differences only when both sides share a collation; a Python-sorted list
    against a `sort`-sorted one reported 29 missing names when all were exported.
+
+4. **A shader pass that mangles its own input.** `process_uniform_declarations`
+   corrupted every 26.3 terrain shader and no build, link or symbol audit could
+   see it — the wrong text is still text. It is now a host-side test.
+
+5. **A test that compiled the wrong file.** `#include "passes.inc"` prefers the
+   directory of the including file over `-I`, so a stale extract beside the test
+   shadowed the patched one and "pristine upstream" comparisons silently ran the
+   patched code. Three probes reported a fixed bug as unfixed before this was
+   caught. The runner now extracts to a fresh temp directory.
 
 The general lesson, and the reason CI publishes the full symbol list with
 `if: always()`: every one of these looked like a defect in the renderer, and two

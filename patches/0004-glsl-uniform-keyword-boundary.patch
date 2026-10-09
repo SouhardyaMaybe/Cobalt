@@ -1,0 +1,86 @@
+diff --git a/MobileGlues-cpp/gl/glsl/glsl_for_es.cpp b/MobileGlues-cpp/gl/glsl/glsl_for_es.cpp
+index c7eee88..4a1e75a 100644
+--- a/MobileGlues-cpp/gl/glsl/glsl_for_es.cpp
++++ b/MobileGlues-cpp/gl/glsl/glsl_for_es.cpp
+@@ -238,6 +238,27 @@ void trim(std::string& str) {
+     str.erase(std::find_if(str.rbegin(), str.rend(), [](int ch) { return !std::isspace(ch); }).base(), str.end());
+ }
+ 
++static inline bool is_identifier_char(char c) {
++    return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
++}
++
++// `uniform` is a keyword, so it only counts where it stands on its own. Matching the
++// bare substring also matches identifiers that merely contain it, and since 26.3 every
++// uniform is an interface block whose instance name starts with `_uniform`. Firing
++// inside one of those consumed the enclosing condition and every statement up to the
++// next `;`, then rewrote the lot as a uniform declaration -- leaving a dangling `_`
++// in front of it, and the driver rejected the shader on the resulting syntax error.
++static inline bool is_uniform_keyword(const std::string& src, size_t pos) {
++    if (src.compare(pos, 7, "uniform") != 0) {
++        return false;
++    }
++    if (pos > 0 && is_identifier_char(src[pos - 1])) {
++        return false;
++    }
++    const size_t after = pos + 7;
++    return after >= src.size() || !is_identifier_char(src[after]);
++}
++
+ // Process all uniform declarations into `uniform <precision> <type> <name>;` form
+ std::string process_uniform_declarations(const std::string& glslCode) {
+     std::string result;
+@@ -249,7 +270,7 @@ std::string process_uniform_declarations(const std::string& glslCode) {
+     result.reserve(glslCode.length());
+ 
+     while (scan_pos < length) {
+-        if (glslCode.compare(scan_pos, 7, "uniform") == 0) {
++        if (is_uniform_keyword(glslCode, scan_pos)) {
+             if (scan_pos > chunk_start) {
+                 result.append(glslCode, chunk_start, scan_pos - chunk_start);
+             }
+@@ -314,12 +335,38 @@ std::string process_uniform_declarations(const std::string& glslCode) {
+             }
+             const std::string name = glslCode.substr(name_start, scan_pos - name_start);
+ 
+-            size_t decl_end = glslCode.find(';', scan_pos);
+-            if (decl_end == std::string::npos)
+-                decl_end = length;
+-            else
+-                ++decl_end;
+-            const bool has_initializer = (glslCode.find('=', scan_pos) < decl_end);
++            // `uniform Name { ... } Instance;` -- an interface block. Its first `;` is
++            // inside the body, so taking the declaration only up to there restarted the
++            // scan partway through a block; and the rewrite above cannot express a block
++            // at all. Consume the block whole and pass it through untouched.
++            size_t body_start = scan_pos;
++            while (body_start < length && std::isspace(glslCode[body_start]))
++                ++body_start;
++            const bool is_block = body_start < length && glslCode[body_start] == '{';
++
++            size_t decl_end;
++            if (is_block) {
++                int depth = 0;
++                decl_end = body_start;
++                while (decl_end < length) {
++                    if (glslCode[decl_end] == '{') {
++                        ++depth;
++                    } else if (glslCode[decl_end] == '}' && --depth == 0) {
++                        ++decl_end;
++                        break;
++                    }
++                    ++decl_end;
++                }
++                const size_t block_semi = glslCode.find(';', decl_end);
++                decl_end = (block_semi == std::string::npos) ? length : block_semi + 1;
++            } else {
++                decl_end = glslCode.find(';', scan_pos);
++                if (decl_end == std::string::npos)
++                    decl_end = length;
++                else
++                    ++decl_end;
++            }
++            const bool has_initializer = !is_block && (glslCode.find('=', scan_pos) < decl_end);
+             if (has_initializer) {
+                 result.append("uniform").append(precision).append(" ").append(type).append(" ").append(name).append(
+                     ";");
