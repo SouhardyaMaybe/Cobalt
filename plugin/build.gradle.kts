@@ -28,9 +28,32 @@ android {
         }
     }
 
+    signingConfigs {
+        // A debug-signed release, deliberately.
+        //
+        // An unsigned APK cannot be installed, and the launcher discovers
+        // renderer plugins by querying installed packages -- so an unsigned
+        // artifact is not a degraded build, it is an untestable one. There is
+        // no release key for this project and no user to hold one.
+        //
+        // The consequence is stated rather than hidden: Android will refuse to
+        // update an existing install signed with a different key, and this key
+        // is generated per build, so every CI run produces a different
+        // signature. Reinstalling means uninstalling first. A real release key
+        // belongs in a secret store, not in a repository, and that is a
+        // decision to make when there is a distribution to protect.
+        create("release") {
+            storeFile = file(System.getProperty("cobalt.storeFile") ?: "cobalt-debug.jks")
+            storePassword = System.getProperty("cobalt.storePassword") ?: "cobalt"
+            keyAlias = System.getProperty("cobalt.keyAlias") ?: "cobalt"
+            keyPassword = System.getProperty("cobalt.keyPassword") ?: "cobalt"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 

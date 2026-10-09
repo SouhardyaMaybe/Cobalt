@@ -156,6 +156,12 @@ jobs:
           fi
           exit $fail
 
+      # Before the APK, not after: an unsigned APK cannot be installed, and the
+      # launcher finds renderer plugins by querying installed packages, so an
+      # unsigned build is not testable at all.
+      - name: Generate the signing key
+        run: ./tools/gen-key.sh
+
       - name: Build the plugin APK
         working-directory: plugin
         run: gradle assembleRelease --no-daemon --stacktrace
@@ -163,6 +169,40 @@ jobs:
       # if: always(). The symbol list is the evidence for whatever the audit
       # says, and an audit that fails without publishing it cannot be diagnosed
       # without re-running the build.
+      # The APK is the deliverable, and two things about it fail silently: an
+      # unsigned APK installs nowhere, and a missing ABI shows up as a plugin
+      # the launcher lists but cannot load. Both are checked here rather than on
+      # a device.
+      - name: Verify the APK
+        run: |
+          set -euo pipefail
+          apk=$(ls plugin/build/outputs/apk/release/*.apk)
+          echo "artifact: $apk ($(du -h "$apk" | cut -f1))"
+
+          python3 - "$apk" <<'PY'
+          import sys, zipfile
+          z = zipfile.ZipFile(sys.argv[1])
+          names = z.namelist()
+          signed = any(n.startswith("META-INF/") and n.endswith((".RSA", ".DSA", ".EC"))
+                       for n in names)
+          print("signed:", signed)
+          if not signed:
+              sys.exit("APK is unsigned; Android will refuse to install it")
+          for abi in ("arm64-v8a", "armeabi-v7a", "x86_64"):
+              so = "lib/%s/libcobalt.so" % abi
+              present = so in names
+              print("%s: %s" % (abi, "%d bytes" % z.getinfo(so).file_size if present else "MISSING"))
+              if not present:
+                  sys.exit("%s is missing; the launcher would list a plugin it cannot load" % abi)
+          # The launcher reads the renderer config from this string resource, so
+          # its absence means a silently skipped plugin.
+          arsc = z.read("resources.arsc")
+          for probe in (b"opengles3", b"libcobalt.so", b"SDL_OPENGL_LIBRARY"):
+              if probe not in arsc:
+                  sys.exit("resources.arsc is missing %r; the launcher would not find the config" % probe)
+          print("renderer config resource: present")
+          PY
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
