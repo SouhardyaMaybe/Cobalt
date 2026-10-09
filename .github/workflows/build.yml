@@ -217,8 +217,14 @@ jobs:
               echo "::error::upstream still declares $sym; src/ defines it too (duplicate symbol)"
               fail=1
             fi
-            if ! grep -rq "alias(\"$sym\")" src/; then
-              echo "::error::src/ does not emit ${sym}ARB; NATIVE_FUNCTION_HEAD used to"
+            # GLAPI is required on the alias itself. An __attribute__((alias)) does
+            # not inherit its target's visibility, so an alias written without it
+            # compiles, links and exports nothing under -fvisibility=hidden.
+            # Verified both ways:
+            #     no GLAPI  -> nm -D shows target_a only
+            #     with GLAPI-> nm -D shows alias_a and target_a, same address
+            if ! grep -rq "GLAPI.*GLAPIENTRY void ${sym}ARB.*alias(\"$sym\")" src/; then
+              echo "::error::src/ does not export ${sym}ARB with default visibility"
               fail=1
             fi
           done

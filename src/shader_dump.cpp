@@ -88,18 +88,27 @@ extern "C" {
 
 // glCompileShaderARB, because upstream's NATIVE_FUNCTION_HEAD emitted it and
 // replacing the function without it silently drops a name Minecraft resolves.
-// Caught by the CI name-set audit, which reported "missing 1 name" on all three
-// ABIs -- the gate earning its keep on the change that made it necessary.
-__attribute__((alias("glCompileShader"))) void glCompileShaderARB(GLuint shader);
+//
+// The GLAPI on this line is not decoration. Verified: an __attribute__((alias))
+// does NOT inherit the visibility of its target. Built with
+// -fvisibility=hidden and no attribute here:
+//
+//   $ clang++ -shared -fvisibility=hidden ...
+//   $ nm -D --defined-only lib.so | grep -E 'target_a|alias_a'
+//   00000000000005e0 T target_a          <- only the target survives
+//
+// which is exactly upstream's macro, which puts GLAPI on both:
+//
+//   extern "C" GLAPI GLAPIENTRY type name##ARB(__VA_ARGS__) __attribute__((alias(#name)));
+//   extern "C" GLAPI GLAPIENTRY type name(__VA_ARGS__) {
+//
+// The first version of this file had the alias without it, and the 256-name
+// audit reported glCompileShaderARB missing on all three ABIs while every other
+// check passed.
+GLAPI GLAPIENTRY void glCompileShaderARB(GLuint shader) __attribute__((alias("glCompileShader")));
 
 // Replaces upstream's NATIVE_FUNCTION passthrough, which calls the driver and
 // returns without learning anything. A one-line forward has nothing to preserve.
-//
-// Note what this definition must carry, and why. glCompileShaderARB has to be
-// emitted here because NATIVE_FUNCTION_HEAD is what produced it before, and
-// GLAPI because the project compiles C++ with -fvisibility=hidden: without the
-// visibility attribute the linker garbage-collects it under --gc-sections,
-// silently. Both were found the hard way; the audit now guards them.
 GLAPI GLAPIENTRY void glCompileShader(GLuint shader) {
     GLES.glCompileShader(shader);
 
