@@ -1,4 +1,3 @@
 [submodule "ref/mobileglues"]
-	path = MobileGlues-cpp
+	path = ref/mobileglues
 	url = https://github.com/MobileGL-Dev/MobileGlues
-	branch = main

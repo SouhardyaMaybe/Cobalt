@@ -19,6 +19,14 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # No Gradle wrapper is checked in, so the build asks for Gradle directly.
+      # The version is pinned for the same reason the NDK is: an unpinned build
+      # toolchain turns a green build red with no code change, which is
+      # indistinguishable from a real regression.
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
       # The NDK is required locally too. See build-android.sh.
       - name: Set up the Android NDK
         uses: nttld/setup-ndk@v1
@@ -79,15 +87,18 @@ jobs:
 
       - name: Build the plugin APK
         working-directory: plugin
-        run: ./gradlew :app:assembleRelease --no-daemon
+        run: gradle assembleRelease --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
           name: cobalt-apk
-          path: plugin/app/build/outputs/apk/release/*.apk
+          path: plugin/build/outputs/apk/release/*.apk
 
       - name: Publish
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            plugin/build/outputs/apk/release/*.apk \
+            --generate-notes

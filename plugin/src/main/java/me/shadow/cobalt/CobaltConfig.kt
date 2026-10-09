@@ -1,108 +1,115 @@
 package me.shadow.cobalt
 
-import com.google.gson.Gson
+import android.content.res.Resources
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 
 /**
- * Cobalt Wrapper — renderer configuration for ZalithLauncher2 (V2 contract).
+ * Cobalt's launcher-facing configuration.
  *
- * This file is the whole integration surface. Everything a launcher needs to
- * route Minecraft's GL calls through Cobalt is here.
+ * There is one source of truth for this and it is not this file:
+ * plugin/config/cobalt-renderer.json. The launcher reads the renderer config
+ * from an Android string resource, so it has to be baked into the APK, which
+ * makes a hand-written Kotlin constant a second copy waiting to drift. This
+ * reads the shipped resource back instead, so the file a maintainer edits and
+ * the bytes the launcher parses cannot disagree.
  *
- * The values below are not arbitrary. Each one exists because a specific
- * mechanism in the launcher required it, and several of them were found by
- * reading the launcher's source rather than by guessing:
+ * Every value in that JSON is traceable to something the launcher does. The
+ * notes below are the reasoning, because the obvious choices are wrong:
  *
  *  rendererId `opengles3`
- *      pojavInitOpenGL() compares POJAV_RENDERER against a fixed list. Anything
- *      unmatched falls through to br_init(), the Birch loader, which dlopens
- *      libraries this plugin does not ship — a jump to address zero. The prefix
- *      "opengles" selects the GL bridge.
+ *      pojavInitOpenGL() compares POJAV_RENDERER against a fixed list, and
+ *      anything unmatched falls through to br_init(), the Birch loader, which
+ *      dlopens libraries this plugin does not ship. On the device that jump
+ *      landed at address zero: SIGSEGV, pc=0x0.
  *
- *      It deliberately does NOT end in "_desktopgl". That suffix makes the
- *      bridge request eglBindAPI(EGL_OPENGL_API), which Android has no
- *      implementation for; the device answered `bind failed: 0x300c`
- *      (EGL_BAD_API) on every attempt. The translation from desktop GL happens
- *      in this layer, so an ES context is what is actually wanted.
+ *      The "opengles" prefix is not cosmetic. jni/sdl_hook.c's
+ *      sdlGlesCompatEnabled() reads POJAV_RENDERER first and returns true for
+ *      any id starting with "opengles", which is what forces the ES profile on
+ *      SDL's window and context creation. An id outside that prefix falls
+ *      through to isMobileGluesEgl(), which compares the EGL library's basename
+ *      against the literal "libmobileglues.so" -- and this library is named
+ *      libcobalt.so, so that test would fail and the ES compat layer would be
+ *      off. The id is load-bearing twice over, for two different mechanisms.
  *
- *  rendererGLPath / rendererEGLPath
- *      Both name the same library. The launcher loads it as the EGL
- *      implementation and then resolves GL through its eglGetProcAddress, so a
- *      separate EGL shim would give one symbol two addresses. The library must
- *      exist in nativeLibraryDir or the launcher reports "Failed to load a
- *      library" and no context is ever made.
+ *      It must NOT end in "_desktopgl". That suffix makes the bridge request
+ *      eglBindAPI(EGL_OPENGL_API); Android has no implementation for it, and
+ *      every attempt on the device answered `bind failed: 0x300c`
+ *      (EGL_BAD_API). The desktop-to-ES translation happens inside this
+ *      renderer, so an ES context is what is actually wanted.
+ *
+ *  rendererGLPath / rendererEGLPath, both `**|libcobalt.so`
+ *      The `**|` prefix is replaced by the plugin's real nativeLibraryDir when
+ *      the launcher parses the config (RendererConfig.resolveNativePaths).
+ *
+ *      The absolute path is required, not a convenience. The launcher's
+ *      LD_LIBRARY_PATH is built by getLibraryPath(), which includes
+ *      RendererPluginManager.selectedRendererPlugin -- the *V1* plugin list.
+ *      A V2 plugin lives in RendererV2PluginManager's list, so that lookup
+ *      returns null and the plugin's lib directory is never added. A bare
+ *      filename would therefore fail to dlopen.
+ *
+ *      Both name the same library on purpose. The launcher loads it as the EGL
+ *      implementation and then resolves GL through *that* library's
+ *      eglGetProcAddress. Two libraries would give one GL symbol two addresses,
+ *      which is the failure Minecraft 26.3 refuses to start on.
+ *
+ *  SDL_OPENGL_LIBRARY
+ *      This is the one value that overrides a launcher default rather than
+ *      working around a gap. In setRendererEnv():
+ *
+ *          envMap["SDL_OPENGL_LIBRARY"] = rendererId   // "opengles3", not a path
+ *          ...
+ *          envMap += renderer.getRendererEnv().value    // ours merges HERE
+ *
+ *      SDL_GL_LoadLibrary is handed "opengles3" -- not a path, not a library --
+ *      so SDL falls back to the system GLES and resolves glGetError somewhere
+ *      else. Minecraft 26.3 then fails its own startup gate:
+ *
+ *          if (FunctionProvider.getFunctionAddress("glGetError")
+ *                  != SDLVideo.SDL_GL_GetProcAddress("glGetError"))
+ *              throw new BackendCreationException("glGetError mismatch", ...);
+ *
+ *      Because our env is merged after that assignment, naming the library here
+ *      wins.
  *
  *  LIBGL_ES=3
- *      Read by the launcher's GL bridge and becomes
- *      EGL_CONTEXT_CLIENT_VERSION on eglCreateContext. Unset, it defaults to 2,
- *      and no 1.13+ Minecraft can run on an ES 2 context. Note this is NOT
- *      COBALT_ES, which nothing in the launcher reads.
+ *      Read by the launcher's GL bridge and turned into
+ *      EGL_CONTEXT_CLIENT_VERSION on eglCreateContext. Unset it defaults to 2,
+ *      and no 1.13+ Minecraft runs on an ES 2 context. Note this is LIBGL_ES,
+ *      not CB_ES -- nothing in the launcher reads the latter.
  */
 object CobaltConfig {
 
-    private const val RENDERER_ID = "opengles3"
-    // One library for both roles, which is what MobileGlues does
-    // ("MobileGlues:libmobileglues.so:libmobileglues.so") and what the working
-    // 2.0.3-fork build does. The launcher loads it as the EGL implementation
-    // and then resolves every GL entry point through *its* eglGetProcAddress,
-    // so a second, separate EGL library would only create a second address for
-    // the same symbol -- which is the failure being fixed above.
-    private const val LIB = "libcobalt.so"
+    /** The renderer library. Renamed from libmobileglues.so by tools/rebrand.py. */
+    const val LIBRARY = "libcobalt.so"
 
     /**
-     * The V2 renderer config, as the launcher's RendererConfig.kt expects it.
+     * Where the renderer puts its config, log and shader cache.
      *
-     * `env` is where two of the load-bearing values live, and the ordering in
-     * the launcher matters:
-     *
-     *     envMap["SDL_OPENGL_LIBRARY"] = rendererId      // <- just "opengles3"
-     *     envMap += renderer.getRendererEnv().value       // <- ours merges here
-     *     envMap["SDL_EGL_LIBRARY"] = "$path/$eglName"  // <- correct, set after
-     *
-     * SDL_GL_LoadLibrary therefore gets "opengles3" — not a path, and not a
-     * library — so SDL falls back to the system GLES and resolves glGetError
-     * somewhere else entirely. MC 26.3 then fails its own startup gate:
-     *
-     *     if (GL.getFunctionProvider().getFunctionAddress("glGetError")
-     *         != SDLVideo.SDL_GL_GetProcAddress("glGetError"))
-     *         throw new BackendCreationException("glGetError mismatch", ...);
-     *
-     * Because our env is merged after that assignment, naming the library here
-     * wins. A bare filename resolves, because the launcher already puts this
-     * plugin's nativeLibraryDir on LD_LIBRARY_PATH. This one value is the
-     * difference between 26.3 starting and not starting.
+     * Deliberately the plugin's own nativeLibraryDir rather than the
+     * /sdcard/Cobalt default: the app sandbox means the plugin can always write
+     * there, whereas /sdcard needs a runtime permission the plugin cannot
+     * request on the launcher's behalf. CB_DIR_PATH overrides the default.
      */
-    fun rendererConfigJson(): String {
-        val env = linkedMapOf(
-            "LIBGL_ES" to "3",
-            "SDL_OPENGL_LIBRARY" to LIB,
-            "SDL_EGL_LIBRARY" to LIB,
-            "SDL_VIDEO_DRIVER" to "android",
-            "MG_COUNT_LAUNCH" to "1",
-            "COBALT_ES" to "3",
-            "COBALT_GL" to "32",
-            "COBALT_DEBUG" to "0"
-        )
+    const val CONFIG_DIR = "**|cobalt"
 
-        return Gson().toJson(
-            mapOf(
-                "displayName" to "Cobalt Wrapper",
-                "rendererId" to RENDERER_ID,
-                "rendererGLPath" to LIB,
-                "rendererEGLPath" to LIB,
-                "dlopenLibPaths" to emptyList<String>(),
-                "minMCVer" to null,
-                "maxMCVer" to null,
-                "env" to env.map { (k, v) ->
-                    mapOf("type" to "NormalEnv", "key" to k, "value" to v)
-                }
-            )
-        )
-    }
+    /** Read the config the launcher will also read, so there is one copy. */
+    fun configJson(res: Resources): String =
+        res.getString(R.string.cobalt_renderer_config)
 
-    /** Shown in the plugin's own activity, so the build is identifiable. */
-    fun describe(): JsonObject = JsonObject().apply {
-        addProperty("rendererId", RENDERER_ID)
-        addProperty("library", LIB)
+    /** For the plugin's own activity. Shows what is actually installed. */
+    fun describe(res: Resources): JsonObject {
+        val o = JsonObject()
+        try {
+            val parsed = JsonParser.parseString(configJson(res)).asJsonObject
+            o.add("renderer", parsed)
+        } catch (t: Throwable) {
+            // A malformed config is a build error, and the launcher's own parse
+            // is wrapped in runCatching and skips the plugin silently. Showing
+            // the failure here is the only place it becomes visible.
+            o.addProperty("error", "config is not valid JSON: ${t.message}")
+        }
+        return o
     }
 }
