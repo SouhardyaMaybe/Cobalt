@@ -10,10 +10,18 @@ Writes two manifests, differing only in the version, and asserts the parser tell
 apart. A parser that returns the same answer for both is not reading anything.
 """
 
+
 import struct
+import subprocess
 import sys
 import os
 import zipfile
+
+# Real manifests, committed rather than synthesized. A synthetic pool is built the way
+# the parser expects to read one; these were built by the Android build tools, and they
+# are UTF-16 where the synthetic ones were UTF-8. That difference is the entire reason
+# the UTF-16 bug survived a passing test suite.
+FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "apk-fixtures")
 
 RES_XML_TYPE = 0x0003
 RES_STRING_POOL_TYPE = 0x0001
@@ -48,6 +56,33 @@ def string_pool(strings):
     out = struct.pack("<HHIIIIII", RES_STRING_POOL_TYPE, header_size, total,
                       string_count, 0, POOL_UTF8_FLAG,
                       header_size + 4 * string_count, 0)
+    for o in offsets:
+        out += struct.pack("<I", o)
+    return out + blob
+
+
+def string_pool_utf16(strings):
+    """UTF-16 ResStringPool: a 16-bit character count, then the text, then a NUL.
+
+    This is what a real APK uses, and the first version of the parser never tested it.
+    It read the count but did not advance past it, so every string lost its first
+    character and kept the terminating NUL -- "launchMode" came back as "aunchMode".
+    The attribute names were mangled identically, nothing matched, and the parser
+    reported no version while exiting successfully.
+    """
+    blob = b""
+    offsets = []
+    for s in strings:
+        offsets.append(len(blob))
+        units = s.encode("utf-16-le")
+        n = len(units) // 2
+        blob += struct.pack("<H", n) + units + b"\x00\x00"
+    header_size = 28
+    count = len(strings)
+    total = header_size + 4 * count + len(blob)
+    out = struct.pack("<HHIIIIII", RES_STRING_POOL_TYPE, header_size, total,
+                      count, 0, 0,  # flags: not UTF-8
+                      header_size + 4 * count, 0)
     for o in offsets:
         out += struct.pack("<I", o)
     return out + blob
@@ -101,6 +136,28 @@ def build_manifest(version_name, version_code):
     # the pool's own chunk type and a plausible-looking mistake.
     xml_header = struct.pack("<HHI", RES_XML_TYPE, 8, 8 + len(chunks))
     return xml_header + chunks
+
+
+def build_manifest_utf16(version_name, version_code):
+    """The encoding a real APK uses, and the one the parser got wrong."""
+    strings = [
+        "manifest",           # 0
+        "versionCode",        # 1
+        "versionName",        # 2
+        "versionName",        # 3  -- deliberately repeated
+        "launchMode",         # 4  -- a name that loses its first letter if misread
+        version_name,         # 5
+    ]
+    attrs = [
+        (0xFFFFFFFF, 1, res_value(TYPE_INT_DEC, version_code)),
+        (0xFFFFFFFF, 2, res_value(TYPE_STRING, 5)),
+    ]
+    chunks = string_pool_utf16(strings)
+    chunks += start_element(0, attrs)
+    # An element whose name would come out as "aunchMode" if the length prefix were
+    # mishandled, so this case cannot pass by accident.
+    chunks += start_element(4, [(0xFFFFFFFF, 3, res_value(TYPE_STRING, 5))])
+    return struct.pack("<HHI", RES_XML_TYPE, 8, 8 + len(chunks)) + chunks
 
 
 def end_element(name_idx):
@@ -173,6 +230,21 @@ def main():
     b = mod.parse(build_manifest("0.1.0", 1))
     check(a != b, "two different manifests give two different answers")
 
+    # UTF-16, which is what real APKs use. Every string in this pool loses its first
+    # character if the 16-bit length prefix is read but not consumed, so these two
+    # checks are what the UTF-8-only test suite was missing.
+    utf16 = build_manifest_utf16("4.5.6", 40506)
+    pool_strings, _ = mod.parse_string_pool(utf16, 8)
+    check(pool_strings[4] == "launchMode",
+          "UTF-16 string read whole (got %r)" % pool_strings[4])
+    check("versionName" in pool_strings,
+          "UTF-16 attribute name intact (got %r)" % [s for s in pool_strings if "ersion" in s])
+    got = mod.parse(utf16)
+    check(got.get("versionName") == "4.5.6",
+          "UTF-16 versionName read back as %r" % got.get("versionName"))
+    check(got.get("versionCode") == 40506,
+          "UTF-16 versionCode read back as %r" % got.get("versionCode"))
+
     # Attribute order must not matter: a real manifest lists them however the build
     # tools wrote them, and versionCode appearing before versionName is enough to make
     # a parser that assumes an order return nothing.
@@ -187,6 +259,32 @@ def main():
     got = mod.parse(nested)
     check(got.get("versionName") == "7.7.7", "found after an unrelated element")
     check(got.get("versionCode") == 707, "versionCode found after an unrelated element")
+
+    # The manifest the real Android build tools produced. This is the fixture that
+    # matters: it is UTF-16, where every manifest built above is UTF-8, and reading it
+    # correctly is what the synthetic ones cannot establish.
+    fixture = os.path.join(FIXTURES, "real-manifest.bin")
+    if not os.path.exists(fixture):
+        print("ok    real manifest fixture not present, skipped")
+    else:
+        with open(fixture, "rb") as fh:
+            blob = fh.read()
+        flags = struct.unpack_from("<I", blob, 8 + 16)[0]
+        check(not (flags & 0x100), "the real fixture's pool is UTF-16, the path that was untested")
+
+        strings, _ = mod.parse_string_pool(blob, 8)
+        # Every string that lost its first character. "launchMode" came back as
+        # "aunchMode"; this asserts the general property, not one spelling.
+        lost = [s for s in strings[:60] if s and s != s.lstrip()]
+        check(not lost, "no real string lost its first character (got %r)" % lost[:3])
+        check(any(s == "versionName" for s in strings), "'versionName' read intact")
+        check(any(s == "launchMode" for s in strings), "'launchMode' read intact")
+
+        got = mod.parse(blob)
+        check(got.get("versionName") == "0.1.0",
+              "real manifest versionName read as %r" % got.get("versionName"))
+        check(got.get("versionCode") == 1,
+              "real manifest versionCode read as %r" % got.get("versionCode"))
 
     # And through a real zip, the way CI will call it.
     apk = os.path.join("/tmp", "cobalt-parser-test.apk")

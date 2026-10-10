@@ -84,12 +84,17 @@ def parse_string_pool(data, at):
                 p += 1
             strings.append(data[p:p + n].decode("utf-8", "replace"))
         else:
+            # UTF-16: a 16-bit character count, then that many UTF-16 code units, then
+            # a NUL terminator. The count is read at p and the text starts after it --
+            # p must advance past the prefix exactly once, or the first character is
+            # dropped and the terminating NUL is kept. Which is what this did: every
+            # string came back as "aunchMode" instead of "launchMode", and since the
+            # attribute names were mangled the same way, no attribute ever matched and
+            # the parser reported no version while exiting successfully.
             n = u16(data, p)
             p += 2
             if n & 0x8000:
-                n = ((n & 0x7FFF) << 16) | u16(data, p + 2)
-                p += 4
-            else:
+                n = ((n & 0x7FFF) << 16) | u16(data, p)
                 p += 2
             strings.append(data[p:p + n * 2].decode("utf-16-le", "replace"))
 
