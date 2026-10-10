@@ -22,3 +22,8 @@ plugin/*.jks
 # a second committed copy is a second thing to forget to update, and this one is
 # consumed by the renderer rather than read by a human, so the drift would be silent.
 plugin/src/main/assets/
+
+# Python bytecode. tools/test-apk-version.py imports tools/apk-version.py by path,
+# which writes a __pycache__ entry next to it.
+__pycache__/
+*.pyc
