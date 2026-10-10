@@ -1,58 +1,84 @@
-Cobalt Wrapper v0.3.2
+Cobalt Wrapper v0.4.0
 
-Minecraft 26.3 should now start.
+Minecraft 26.3 works. Everything after this is cleanup.
 
-The v0.3.1 shader dump was meant to find this and did. The driver was never
-rejecting the shader it was given:
+The shader bug is fixed and confirmed on device -- no compile errors, no failed
+pipelines, world renders, multiplayer connects. That was v0.3.2.
 
-    ERROR: 0:224: '_uniform' : undeclared identifier
-    ERROR: 0:224: '_instance_00_00' : Syntax error
+What is in this release is the three things your log showed that were real, plus the
+guards that stop them coming back. None of them changed how anything renders.
 
-`_uniform` and `_instance_00_00` are not in Minecraft's source. They are what
-Cobalt wrote.
+1. The renderer was running on default settings
 
-What was wrong
+Your log said:
 
-26.3 is the only version that ships RenderPearl, which flattens uniforms into
-interface blocks named `_uniform_00_00` and `_uniform_instance_00_00`. Every
-uniform in every 26.3 shader is one of those, and each identifier *starts* with
-the word `uniform`.
+    Failed to load config. Use default config.
+    [Cobalt] Setting: maxGlslCacheSize            = 0
 
-Cobalt's GLSL post-processor looked for that word as a bare substring rather than
-as a keyword, so it fired in the middle of those identifiers. When it did it
-consumed the enclosing condition and every statement up to the next `;`, and
-rewrote them as a uniform declaration:
+No config file was shipped, so the renderer fell back to defaults. It does that
+quietly: config_get_int() answers -1 for a key it cannot read, and the settings code
+reads -1 as "the config did not say" rather than as an error. The visible cost was a
+disabled shader cache -- and with it the negative cache, so a shader that fails to
+compile is retried on every resource reload, and Minecraft reloads resources every time
+you change dimension.
 
-    if (_uniform_instance_00_00.UseRgss == 1)
-    {
-        highp vec2 param = _interface_variable_03;
+The settings now ship with the plugin and are installed on first launch. Everything is
+at the value it was already using, apart from the cache, which is now on.
 
-arrived at the driver as
+2. The plugin said it was 0.1.0
 
-    if (_uniform _instance_00_00 ;
+You noticed this. It was hardcoded at 0.1.0 in build.gradle.kts and never changed for
+six releases, so v0.3.2's App info screen said 0.1.0. Nothing caught it because the
+build did exactly what it was told -- there was just nothing asking for the right
+answer.
 
-That dangling underscore is the "undeclared identifier". All 12 core/terrain
-pipelines failed; nothing else was wrong.
+VERSION is now the single source. CI reads the version back out of the built APK and
+fails if it disagrees, so this cannot recur silently.
 
-The same pass had a second defect: it found the end of an interface block at the
-block's first `;`, which is inside the body. Blocks containing an initialiser lost
-their body and left an unbalanced brace behind. Older versions never hit it, which
-is why 1.13 through 26.2 were fine.
+3. A comment explaining what the remaining log lines are
 
-Why it took this long
+Not every warning is ours. `Couldn't leave fullscreen`, `Failed to set window icon`,
+the udev and /proc warnings and the "unexpected shutdown ... resetting fullscreen mode"
+note from the previous crashed run come from Zalith, SDL or the Android sandbox.
+`Can't ping mcpvp.net` is DNS.
 
-Four earlier attempts to diagnose this failed, each because it guessed at a cause
-and tested the guess rather than the code. The dump settled it: comparing the two
-sources showed the corruption was already visible in Cobalt's own output. The fix
-took twenty minutes after that.
+One is worth keeping: `Not Detected GL_EXT_multi_draw_indirect!` is a true statement
+about your Adreno 613, and the multi-draw order in the log is the renderer filtering
+itself down to what the device can actually do -- `unroll` for arrays is that working
+correctly, since unroll is the one backend every device has. Silencing that message
+would only hide why the order is what it is.
 
-The lasting change is a test. The translation passes are plain string handling, so
-`tools/test-glsl.sh` now lifts them out of the shipped source and runs them on a
-desktop in seconds. Two of the cases are taken from your failing shaders, and each
-must come back byte-identical. Linked against unfixed upstream it fails nine
-assertions. It runs in CI, so this class of bug cannot come back unnoticed.
+The version check needed its own parser
 
-Please uninstall v0.3.0 or v0.3.1 first -- each build signs with a new key, so
-Android will refuse to upgrade over them.
+Reading the APK's version meant `aapt`, which cannot read this APK: resolving the
+manifest's `@android:drawable/ic_menu_rotate` needs the framework resource table, and
+without it aapt fails with "attribute value reference does not exist" -- which reads
+like a broken manifest and cost a build.
 
-Unchanged: same renderer core, same 256 exported names, same 6.1 MB per ABI.
+tools/apk-version.py reads the binary manifest directly instead. It is tested against
+a real one, kept in tools/apk-fixtures/, because that is what found the bug: the parser
+handled UTF-8 string pools and every real APK uses UTF-16, where it dropped the first
+character of every string. Reintroducing that bug fails 8 assertions.
+
+The pattern across this project, which is why these are worth reading
+
+Every one of the failures above produced a green build or, worse, a check that passed
+without checking anything:
+
+- a missing GLAPI compiles, links, and is then garbage-collected
+- a missing extern "C" means every dlsym misses it
+- comm(1) reported 29 missing symbols when all were exported
+- a shader pass corrupted every 26.3 shader and no audit could see it
+- a JSON file the renderer could not read looked identical to no file
+- a config staged into jniLibs was silently dropped by AGP
+- a version parser that could not read an APK reported no version and exited 0
+- a test suite built its fixtures the way the code read them, so a wrong assumption
+  was confirmed by both sides
+
+So CI now runs four host-side suites before the build, and every claim in a release
+note is checked against the built artifact rather than against the inputs. Where a
+check could have passed vacuously it is verified that it fails when the defect is
+put back.
+
+Uninstall v0.3.2 first: each build signs with a new key, so Android will not upgrade
+over it.
